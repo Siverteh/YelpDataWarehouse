@@ -1,79 +1,1326 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Yelp Data Warehouse</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        .header-logo {
+            height: 40px;
+            margin-right: 10px;
+        }
+        .card-dashboard {
+            transition: transform 0.2s;
+            margin-bottom: 20px;
+            height: 100%;
+        }
+        .card-dashboard:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .stats-card {
+            text-align: center;
+            padding: 15px;
+        }
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .stats-label {
+            font-size: 1rem;
+            color: #6c757d;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #d32323;
+        }
+        .nav-pills .nav-link {
+            color: #333;
+        }
+        .nav-item {
+            margin-right: 5px;
+        }
+        .tab-pane {
+            padding: 20px 0;
+        }
+        .header-bar {
+            background-color: #d32323;
+            color: white;
+        }
+        #mainTabs .nav-link.active {
+            background-color: #f5f5f5;
+            border-bottom: 2px solid #d32323;
+            color: #d32323;
+        }
+        #mainTabs .nav-link {
+            color: #333;
+            border: none;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #d32323;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .business-table tr {
+            cursor: pointer;
+        }
+        .business-details-card {
+            margin-top: 20px;
+        }
+    </style>
 </head>
-<body>
-    <div class="container mt-4">
-        <h1>Yelp Data Warehouse Dashboard</h1>
-        
-        <ul class="nav nav-tabs" id="myTab" role="tablist">
+<body class="bg-light">
+    <!-- Header -->
+    <header class="header-bar p-3 shadow-sm">
+        <div class="container d-flex align-items-center">
+            <img src="https://s3-media0.fl.yelpcdn.com/assets/public/favicon.yelp_styleguide.yji-118ff475a341620f61baca0fc359f3ff.ico" alt="Yelp Logo" class="header-logo">
+            <h1 class="h4 mb-0">Yelp Data Warehouse Dashboard</h1>
+            <div class="ms-auto">
+                <span id="databaseStatus" class="badge bg-secondary">Checking connections...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container py-4">
+        <!-- Database Implementation Tabs -->
+        <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="mysql-tab" data-bs-toggle="tab" data-bs-target="#mysql" type="button">MySQL</button>
+                <button class="nav-link active" id="mysql-tab" data-bs-toggle="tab" data-bs-target="#mysql" type="button" role="tab">
+                    <i class="bi bi-table"></i> MySQL (Relational)
+                </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="mongodb-tab" data-bs-toggle="tab" data-bs-target="#mongodb" type="button">MongoDB</button>
+                <button class="nav-link" id="mongodb-tab" data-bs-toggle="tab" data-bs-target="#mongodb" type="button" role="tab">
+                    <i class="bi bi-file-earmark-text"></i> MongoDB (Document)
+                </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="neo4j-tab" data-bs-toggle="tab" data-bs-target="#neo4j" type="button">Neo4j</button>
+                <button class="nav-link" id="neo4j-tab" data-bs-toggle="tab" data-bs-target="#neo4j" type="button" role="tab">
+                    <i class="bi bi-diagram-3"></i> Neo4j (Graph)
+                </button>
             </li>
         </ul>
-        
-        <div class="tab-content p-3 border border-top-0 rounded-bottom" id="myTabContent">
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="mainTabsContent">
+            <!-- MySQL Tab -->
             <div class="tab-pane fade show active" id="mysql" role="tabpanel">
-                <h3>MySQL Implementation</h3>
-                <div class="mb-3">
-                    <label for="categorySelect" class="form-label">Category:</label>
-                    <select id="categorySelect" class="form-select">
-                        <option>Restaurants</option>
-                        <option>Shopping</option>
-                        <option>Food</option>
-                    </select>
-                    <button id="loadMySQLData" class="btn btn-primary mt-2">Load Data</button>
+                <!-- Dashboard Navigation Pills -->
+                <ul class="nav nav-pills mb-4" id="mysqlDashboardTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="mysql-overview-tab" data-bs-toggle="pill" data-bs-target="#mysql-overview" type="button" role="tab">Overview</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="mysql-businesses-tab" data-bs-toggle="pill" data-bs-target="#mysql-businesses" type="button" role="tab">Businesses</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="mysql-analytics-tab" data-bs-toggle="pill" data-bs-target="#mysql-analytics" type="button" role="tab">Analytics</button>
+                    </li>
+                </ul>
+
+                <!-- MySQL Dashboard Pill Content -->
+                <div class="tab-content" id="mysqlDashboardTabsContent">
+                    <!-- MySQL Overview -->
+                    <div class="tab-pane fade show active" id="mysql-overview" role="tabpanel">
+                        <div class="row">
+                            <!-- Stats Cards -->
+                            <div class="col-md-4">
+                                <div class="card card-dashboard stats-card">
+                                    <div class="stats-icon text-primary">
+                                        <i class="bi bi-shop fs-1"></i>
+                                    </div>
+                                    <div class="stats-number" id="mysql-business-count">-</div>
+                                    <div class="stats-label">Total Businesses</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card card-dashboard stats-card">
+                                    <div class="stats-icon text-success">
+                                        <i class="bi bi-star fs-1"></i>
+                                    </div>
+                                    <div class="stats-number" id="mysql-review-count">-</div>
+                                    <div class="stats-label">Total Reviews</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card card-dashboard stats-card">
+                                    <div class="stats-icon text-info">
+                                        <i class="bi bi-people fs-1"></i>
+                                    </div>
+                                    <div class="stats-number" id="mysql-user-count">-</div>
+                                    <div class="stats-label">Total Users</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Categories Chart -->
+                        <div class="row mt-4">
+                            <div class="col-md-6">
+                                <div class="card card-dashboard h-100">
+                                    <div class="card-header">
+                                        <h5 class="card-title mb-0">Top Categories</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="mysqlCategoriesChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card card-dashboard h-100">
+                                    <div class="card-header">
+                                        <h5 class="card-title mb-0">Star Distribution</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="mysqlStarsChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MySQL Businesses -->
+                    <div class="tab-pane fade" id="mysql-businesses" role="tabpanel">
+                        <div class="card card-dashboard">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">Top Businesses</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="mysqlCategorySelect" class="form-label">Category:</label>
+                                        <select id="mysqlCategorySelect" class="form-select">
+                                            <option value="Restaurants">Restaurants</option>
+                                            <option value="Shopping">Shopping</option>
+                                            <option value="Food">Food</option>
+                                            <option value="Beauty & Spas">Beauty & Spas</option>
+                                            <option value="Home Services">Home Services</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="mysqlLimitSelect" class="form-label">Limit:</label>
+                                        <select id="mysqlLimitSelect" class="form-select">
+                                            <option value="10">10</option>
+                                            <option value="25">25</option>
+                                            <option value="50">50</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 d-flex align-items-end">
+                                        <button id="loadMySQLBusinesses" class="btn btn-primary w-100">Load Data</button>
+                                    </div>
+                                </div>
+                                
+                                <div id="mysqlBusinessesLoader" class="loader d-none"></div>
+                                <div id="mysqlBusinessesTable"></div>
+                            </div>
+                        </div>
+
+                        <!-- Business Details -->
+                        <div id="mysqlBusinessDetails" class="business-details-card d-none">
+                            <div class="card card-dashboard">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0" id="mysqlBusinessDetailsName">Business Details</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6>Business Information</h6>
+                                            <dl class="row">
+                                                <dt class="col-sm-4">Location:</dt>
+                                                <dd class="col-sm-8" id="mysqlBusinessDetailsLocation"></dd>
+                                                <dt class="col-sm-4">Rating:</dt>
+                                                <dd class="col-sm-8" id="mysqlBusinessDetailsRating"></dd>
+                                                <dt class="col-sm-4">Reviews:</dt>
+                                                <dd class="col-sm-8" id="mysqlBusinessDetailsReviews"></dd>
+                                                <dt class="col-sm-4">Checkins:</dt>
+                                                <dd class="col-sm-8" id="mysqlBusinessDetailsCheckins"></dd>
+                                            </dl>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <canvas id="mysqlBusinessDetailsChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MySQL Analytics -->
+                    <div class="tab-pane fade" id="mysql-analytics" role="tabpanel">
+                        <div class="card card-dashboard">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">Analytics Dashboard</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Review Trends</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="mysqlReviewTrendsChart"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Rating Distribution by Category</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="mysqlCategoryRatingsChart"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div id="mysqlResults"></div>
             </div>
-            
+
+            <!-- MongoDB Tab -->
             <div class="tab-pane fade" id="mongodb" role="tabpanel">
-                <h3>MongoDB Implementation</h3>
-                <!-- MongoDB content -->
+                <!-- Dashboard Navigation Pills -->
+                <ul class="nav nav-pills mb-4" id="mongodbDashboardTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="mongodb-overview-tab" data-bs-toggle="pill" data-bs-target="#mongodb-overview" type="button" role="tab">Overview</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="mongodb-businesses-tab" data-bs-toggle="pill" data-bs-target="#mongodb-businesses" type="button" role="tab">Businesses</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="mongodb-analytics-tab" data-bs-toggle="pill" data-bs-target="#mongodb-analytics" type="button" role="tab">Analytics</button>
+                    </li>
+                </ul>
+
+                <!-- MongoDB Dashboard Pill Content -->
+                <div class="tab-content" id="mongodbDashboardTabsContent">
+                    <!-- MongoDB Overview -->
+                    <div class="tab-pane fade show active" id="mongodb-overview" role="tabpanel">
+                        <div class="row">
+                            <!-- Stats Cards -->
+                            <div class="col-md-4">
+                                <div class="card card-dashboard stats-card">
+                                    <div class="stats-icon text-primary">
+                                        <i class="bi bi-shop fs-1"></i>
+                                    </div>
+                                    <div class="stats-number" id="mongodb-business-count">-</div>
+                                    <div class="stats-label">Total Businesses</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card card-dashboard stats-card">
+                                    <div class="stats-icon text-success">
+                                        <i class="bi bi-star fs-1"></i>
+                                    </div>
+                                    <div class="stats-number" id="mongodb-review-count">-</div>
+                                    <div class="stats-label">Total Reviews</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card card-dashboard stats-card">
+                                    <div class="stats-icon text-info">
+                                        <i class="bi bi-people fs-1"></i>
+                                    </div>
+                                    <div class="stats-number" id="mongodb-user-count">-</div>
+                                    <div class="stats-label">Total Users</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Categories Chart -->
+                        <div class="row mt-4">
+                            <div class="col-md-6">
+                                <div class="card card-dashboard h-100">
+                                    <div class="card-header">
+                                        <h5 class="card-title mb-0">Top Categories</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="mongodbCategoriesChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card card-dashboard h-100">
+                                    <div class="card-header">
+                                        <h5 class="card-title mb-0">Star Distribution</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="mongodbStarsChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MongoDB Businesses -->
+                    <div class="tab-pane fade" id="mongodb-businesses" role="tabpanel">
+                        <div class="card card-dashboard">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">Top Businesses</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="mongodbCategorySelect" class="form-label">Category:</label>
+                                        <select id="mongodbCategorySelect" class="form-select">
+                                            <option value="Restaurants">Restaurants</option>
+                                            <option value="Shopping">Shopping</option>
+                                            <option value="Food">Food</option>
+                                            <option value="Beauty & Spas">Beauty & Spas</option>
+                                            <option value="Home Services">Home Services</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="mongodbLimitSelect" class="form-label">Limit:</label>
+                                        <select id="mongodbLimitSelect" class="form-select">
+                                            <option value="10">10</option>
+                                            <option value="25">25</option>
+                                            <option value="50">50</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 d-flex align-items-end">
+                                        <button id="loadMongoDBBusinesses" class="btn btn-primary w-100">Load Data</button>
+                                    </div>
+                                </div>
+                                
+                                <div id="mongodbBusinessesLoader" class="loader d-none"></div>
+                                <div id="mongodbBusinessesTable"></div>
+                            </div>
+                        </div>
+
+                        <!-- Business Details -->
+                        <div id="mongodbBusinessDetails" class="business-details-card d-none">
+                            <div class="card card-dashboard">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0" id="mongodbBusinessDetailsName">Business Details</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6>Business Information</h6>
+                                            <dl class="row">
+                                                <dt class="col-sm-4">Location:</dt>
+                                                <dd class="col-sm-8" id="mongodbBusinessDetailsLocation"></dd>
+                                                <dt class="col-sm-4">Rating:</dt>
+                                                <dd class="col-sm-8" id="mongodbBusinessDetailsRating"></dd>
+                                                <dt class="col-sm-4">Reviews:</dt>
+                                                <dd class="col-sm-8" id="mongodbBusinessDetailsReviews"></dd>
+                                                <dt class="col-sm-4">Checkins:</dt>
+                                                <dd class="col-sm-8" id="mongodbBusinessDetailsCheckins"></dd>
+                                            </dl>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <canvas id="mongodbBusinessDetailsChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MongoDB Analytics -->
+                    <div class="tab-pane fade" id="mongodb-analytics" role="tabpanel">
+                        <div class="card card-dashboard">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">MongoDB-Specific Analytics</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Document Size Distribution</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="mongodbDocumentSizeChart"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Business Attributes Analysis</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="mongodbAttributesChart"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
+
+            <!-- Neo4j Tab -->
             <div class="tab-pane fade" id="neo4j" role="tabpanel">
-                <h3>Neo4j Implementation</h3>
-                <!-- Neo4j content -->
+                <!-- Dashboard Navigation Pills -->
+                <ul class="nav nav-pills mb-4" id="neo4jDashboardTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="neo4j-overview-tab" data-bs-toggle="pill" data-bs-target="#neo4j-overview" type="button" role="tab">Overview</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="neo4j-businesses-tab" data-bs-toggle="pill" data-bs-target="#neo4j-businesses" type="button" role="tab">Businesses</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="neo4j-network-tab" data-bs-toggle="pill" data-bs-target="#neo4j-network" type="button" role="tab">Network Analysis</button>
+                    </li>
+                </ul>
+
+                <!-- Neo4j Dashboard Pill Content -->
+                <div class="tab-content" id="neo4jDashboardTabsContent">
+                    <!-- Neo4j Overview -->
+                    <div class="tab-pane fade show active" id="neo4j-overview" role="tabpanel">
+                        <div class="row">
+                            <!-- Stats Cards -->
+                            <div class="col-md-3">
+                                <div class="card card-dashboard stats-card">
+                                    <div class="stats-icon text-primary">
+                                        <i class="bi bi-shop fs-1"></i>
+                                    </div>
+                                    <div class="stats-number" id="neo4j-business-count">-</div>
+                                    <div class="stats-label">Businesses</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card card-dashboard stats-card">
+                                    <div class="stats-icon text-success">
+                                        <i class="bi bi-star fs-1"></i>
+                                    </div>
+                                    <div class="stats-number" id="neo4j-review-count">-</div>
+                                    <div class="stats-label">Reviews</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card card-dashboard stats-card">
+                                    <div class="stats-icon text-info">
+                                        <i class="bi bi-people fs-1"></i>
+                                    </div>
+                                    <div class="stats-number" id="neo4j-user-count">-</div>
+                                    <div class="stats-label">Users</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card card-dashboard stats-card">
+                                    <div class="stats-icon text-warning">
+                                        <i class="bi bi-diagram-3 fs-1"></i>
+                                    </div>
+                                    <div class="stats-number" id="neo4j-relationship-count">-</div>
+                                    <div class="stats-label">Relationships</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Categories Chart -->
+                        <div class="row mt-4">
+                            <div class="col-md-6">
+                                <div class="card card-dashboard h-100">
+                                    <div class="card-header">
+                                        <h5 class="card-title mb-0">Top Categories</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="neo4jCategoriesChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card card-dashboard h-100">
+                                    <div class="card-header">
+                                        <h5 class="card-title mb-0">Relationship Types</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="neo4jRelationshipsChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Neo4j Businesses -->
+                    <div class="tab-pane fade" id="neo4j-businesses" role="tabpanel">
+                        <div class="card card-dashboard">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">Top Businesses</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="neo4jCategorySelect" class="form-label">Category:</label>
+                                        <select id="neo4jCategorySelect" class="form-select">
+                                            <option value="Restaurants">Restaurants</option>
+                                            <option value="Shopping">Shopping</option>
+                                            <option value="Food">Food</option>
+                                            <option value="Beauty & Spas">Beauty & Spas</option>
+                                            <option value="Home Services">Home Services</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="neo4jLimitSelect" class="form-label">Limit:</label>
+                                        <select id="neo4jLimitSelect" class="form-select">
+                                            <option value="10">10</option>
+                                            <option value="25">25</option>
+                                            <option value="50">50</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 d-flex align-items-end">
+                                        <button id="loadNeo4jBusinesses" class="btn btn-primary w-100">Load Data</button>
+                                    </div>
+                                </div>
+                                
+                                <div id="neo4jBusinessesLoader" class="loader d-none"></div>
+                                <div id="neo4jBusinessesTable"></div>
+                            </div>
+                        </div>
+
+                        <!-- Business Details -->
+                        <div id="neo4jBusinessDetails" class="business-details-card d-none">
+                            <div class="card card-dashboard">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0" id="neo4jBusinessDetailsName">Business Details</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6>Business Information</h6>
+                                            <dl class="row">
+                                                <dt class="col-sm-4">Location:</dt>
+                                                <dd class="col-sm-8" id="neo4jBusinessDetailsLocation"></dd>
+                                                <dt class="col-sm-4">Rating:</dt>
+                                                <dd class="col-sm-8" id="neo4jBusinessDetailsRating"></dd>
+                                                <dt class="col-sm-4">Reviews:</dt>
+                                                <dd class="col-sm-8" id="neo4jBusinessDetailsReviews"></dd>
+                                                <dt class="col-sm-4">Checkins:</dt>
+                                                <dd class="col-sm-8" id="neo4jBusinessDetailsCheckins"></dd>
+                                            </dl>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <canvas id="neo4jBusinessDetailsChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Neo4j Network Analysis -->
+                    <div class="tab-pane fade" id="neo4j-network" role="tabpanel">
+                        <div class="card card-dashboard">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">Business Network Analysis</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-9">
+                                        <label for="neo4jBusinessIdInput" class="form-label">Enter Business ID:</label>
+                                        <input type="text" id="neo4jBusinessIdInput" class="form-control" placeholder="e.g., JZXV-mwbKlSlnZ2AlMsBUA">
+                                    </div>
+                                    <div class="col-md-3 d-flex align-items-end">
+                                        <button id="loadNeo4jNetwork" class="btn btn-primary w-100">Analyze Network</button>
+                                    </div>
+                                </div>
+                                
+                                <div id="neo4jNetworkLoader" class="loader d-none"></div>
+                                <div id="neo4jNetworkResults" class="d-none">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="card">
+                                                <div class="card-header">
+                                                    <h6 class="card-title mb-0">Related by Category</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div id="neo4jCategoryRelatedTable"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card">
+                                                <div class="card-header">
+                                                    <h6 class="card-title mb-0">Related by User Reviews</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div id="neo4jUserRelatedTable"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>Yelp Data Warehouse</h5>
+                    <p>A multi-model data warehouse implementation using MySQL, MongoDB, and Neo4j.</p>
+                </div>
+                <div class="col-md-3">
+                    <h5>Data Sources</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="https://www.yelp.com/dataset" class="text-white">Yelp Open Dataset</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h5>Technologies</h5>
+                    <ul class="list-unstyled">
+                        <li>MySQL (Relational)</li>
+                        <li>MongoDB (Document)</li>
+                        <li>Neo4j (Graph)</li>
+                        <li>Kafka (Streaming)</li>
+                    </ul>
+                </div>
+            </div>
+            <hr>
+            <div class="text-center">
+                <p class="mb-0">© 2025 Yelp Data Warehouse Project</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.getElementById('loadMySQLData').addEventListener('click', function() {
-            const category = document.getElementById('categorySelect').value;
-            fetch(`/api/mysql/top_businesses?category=${category}`)
-                .then(response => response.json())
-                .then(data => {
-                    const resultsDiv = document.getElementById('mysqlResults');
-                    let html = '<table class="table table-striped">';
-                    html += '<thead><tr><th>Business</th><th>City</th><th>State</th><th>Stars</th><th>Reviews</th></tr></thead>';
-                    html += '<tbody>';
-                    
-                    data.forEach(business => {
-                        html += `<tr>
+        // Check database status
+        async function checkDatabaseStatus() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                
+                const statusBadge = document.getElementById('databaseStatus');
+                if (data.status === 'healthy') {
+                    statusBadge.className = 'badge bg-success';
+                    statusBadge.textContent = 'All Connections OK';
+                } else {
+                    statusBadge.className = 'badge bg-warning';
+                    statusBadge.textContent = 'Some Connections Failed';
+                }
+                
+                // Show individual statuses
+                console.log('Database Status:', data.services);
+            } catch (error) {
+                console.error('Error checking database status:', error);
+                const statusBadge = document.getElementById('databaseStatus');
+                statusBadge.className = 'badge bg-danger';
+                statusBadge.textContent = 'Connection Error';
+            }
+        }
+
+        // Load MySQL Top Businesses
+        async function loadMySQLBusinesses() {
+            const category = document.getElementById('mysqlCategorySelect').value;
+            const limit = document.getElementById('mysqlLimitSelect').value;
+            
+            // Show loader
+            document.getElementById('mysqlBusinessesLoader').classList.remove('d-none');
+            document.getElementById('mysqlBusinessesTable').innerHTML = '';
+            
+            try {
+                const response = await fetch(`/api/mysql/top_businesses?category=${encodeURIComponent(category)}&limit=${limit}`);
+                const businesses = await response.json();
+                
+                // Create table
+                let tableHtml = `
+                    <table class="table table-hover business-table">
+                        <thead>
+                            <tr>
+                                <th>Business Name</th>
+                                <th>City</th>
+                                <th>State</th>
+                                <th>Stars</th>
+                                <th>Reviews</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                businesses.forEach(business => {
+                    tableHtml += `
+                        <tr data-business-id="${business.business_id}" onclick="showMySQLBusinessDetails('${business.business_id}', '${business.business_name}')">
                             <td>${business.business_name}</td>
                             <td>${business.city}</td>
                             <td>${business.state}</td>
                             <td>${business.stars}</td>
                             <td>${business.review_count}</td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    resultsDiv.innerHTML = html;
-                })
-                .catch(error => console.error('Error:', error));
+                        </tr>
+                    `;
+                });
+                
+                tableHtml += `
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('mysqlBusinessesTable').innerHTML = tableHtml;
+            } catch (error) {
+                console.error('Error loading businesses:', error);
+                document.getElementById('mysqlBusinessesTable').innerHTML = '<div class="alert alert-danger">Error loading businesses. Please try again.</div>';
+            } finally {
+                // Hide loader
+                document.getElementById('mysqlBusinessesLoader').classList.add('d-none');
+            }
+        }
+
+        // Show MySQL Business Details
+        async function showMySQLBusinessDetails(businessId, businessName) {
+            document.getElementById('mysqlBusinessDetails').classList.remove('d-none');
+            document.getElementById('mysqlBusinessDetailsName').textContent = businessName;
+            
+            try {
+                const response = await fetch(`/api/mysql/business_performance?business_id=${encodeURIComponent(businessId)}`);
+                const data = await response.json();
+                
+                // Update business details
+                const business = data.business;
+                document.getElementById('mysqlBusinessDetailsLocation').textContent = `${business.city}, ${business.state}`;
+                document.getElementById('mysqlBusinessDetailsRating').textContent = `${business.stars} stars (${business.avg_rating ? business.avg_rating.toFixed(1) : 'N/A'} avg)`;
+                document.getElementById('mysqlBusinessDetailsReviews').textContent = business.review_count || business.total_reviews || 'N/A';
+                document.getElementById('mysqlBusinessDetailsCheckins').textContent = business.total_checkins || 'N/A';
+                
+                // Create chart for reviews and checkins by month
+                const reviewsData = data.reviews_by_month || [];
+                const checkinsData = data.checkins_by_month || [];
+                
+                // Prepare chart data
+                const labels = [];
+                const reviewCounts = [];
+                const checkinCounts = [];
+                
+                // Combine and sort data by year and month
+                const combinedData = {};
+                
+                reviewsData.forEach(item => {
+                    const key = `${item.year}-${item.month}`;
+                    if (!combinedData[key]) {
+                        combinedData[key] = { year: item.year, month: item.month, reviews: 0, checkins: 0 };
+                    }
+                    combinedData[key].reviews = item.review_count;
+                });
+                
+                checkinsData.forEach(item => {
+                    const key = `${item.year}-${item.month}`;
+                    if (!combinedData[key]) {
+                        combinedData[key] = { year: item.year, month: item.month, reviews: 0, checkins: 0 };
+                    }
+                    combinedData[key].checkins = item.checkin_count;
+                });
+                
+                // Convert to sorted array
+                const sortedData = Object.values(combinedData).sort((a, b) => {
+                    if (a.year !== b.year) return a.year - b.year;
+                    return a.month - b.month;
+                });
+                
+                // Extract data for chart
+                sortedData.forEach(item => {
+                    labels.push(`${item.year}-${item.month}`);
+                    reviewCounts.push(item.reviews);
+                    checkinCounts.push(item.checkins);
+                });
+                
+                // Create chart
+                const ctx = document.getElementById('mysqlBusinessDetailsChart').getContext('2d');
+                if (window.businessDetailsChart) {
+                    window.businessDetailsChart.destroy();
+                }
+                
+                window.businessDetailsChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Reviews',
+                                data: reviewCounts,
+                                borderColor: '#d32323',
+                                backgroundColor: 'rgba(211, 35, 35, 0.1)',
+                                fill: true,
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Checkins',
+                                data: checkinCounts,
+                                borderColor: '#4682B4',
+                                backgroundColor: 'rgba(70, 130, 180, 0.1)',
+                                fill: true,
+                                tension: 0.1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Monthly Activity'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading business details:', error);
+            }
+        }
+
+        // Load MongoDB Top Businesses
+        async function loadMongoDBBusinesses() {
+            const category = document.getElementById('mongodbCategorySelect').value;
+            const limit = document.getElementById('mongodbLimitSelect').value;
+            
+            // Show loader
+            document.getElementById('mongodbBusinessesLoader').classList.remove('d-none');
+            document.getElementById('mongodbBusinessesTable').innerHTML = '';
+            
+            try {
+                const response = await fetch(`/api/mongodb/top_businesses?category=${encodeURIComponent(category)}&limit=${limit}`);
+                const businesses = await response.json();
+                
+                // Create table
+                let tableHtml = `
+                    <table class="table table-hover business-table">
+                        <thead>
+                            <tr>
+                                <th>Business Name</th>
+                                <th>City</th>
+                                <th>State</th>
+                                <th>Stars</th>
+                                <th>Reviews</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                businesses.forEach(business => {
+                    tableHtml += `
+                        <tr data-business-id="${business.business_id}" onclick="showMongoDBBusinessDetails('${business.business_id}', '${business.name}')">
+                            <td>${business.name}</td>
+                            <td>${business.city || 'N/A'}</td>
+                            <td>${business.state || 'N/A'}</td>
+                            <td>${business.stars || 'N/A'}</td>
+                            <td>${business.review_count || 'N/A'}</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHtml += `
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('mongodbBusinessesTable').innerHTML = tableHtml;
+            } catch (error) {
+                console.error('Error loading businesses:', error);
+                document.getElementById('mongodbBusinessesTable').innerHTML = '<div class="alert alert-danger">Error loading businesses. Please try again.</div>';
+            } finally {
+                // Hide loader
+                document.getElementById('mongodbBusinessesLoader').classList.add('d-none');
+            }
+        }
+
+        // Show MongoDB Business Details
+        async function showMongoDBBusinessDetails(businessId, businessName) {
+            document.getElementById('mongodbBusinessDetails').classList.remove('d-none');
+            document.getElementById('mongodbBusinessDetailsName').textContent = businessName;
+            
+            try {
+                const response = await fetch(`/api/mongodb/business_performance?business_id=${encodeURIComponent(businessId)}`);
+                const data = await response.json();
+                
+                // Update business details
+                const business = data.business;
+                document.getElementById('mongodbBusinessDetailsLocation').textContent = `${business.city || 'N/A'}, ${business.state || 'N/A'}`;
+                document.getElementById('mongodbBusinessDetailsRating').textContent = `${business.stars || 'N/A'} stars`;
+                document.getElementById('mongodbBusinessDetailsReviews').textContent = business.review_count || (business.review_stats ? business.review_stats.total_reviews : 'N/A');
+                document.getElementById('mongodbBusinessDetailsCheckins').textContent = (business.checkins ? business.checkins.total_checkins : 'N/A');
+                
+                // Create chart for reviews and checkins by month
+                const reviewsData = data.reviews_by_month || [];
+                const checkinsData = data.checkins_by_month || [];
+                
+                // Prepare chart data
+                const labels = [];
+                const reviewCounts = [];
+                const checkinCounts = [];
+                
+                // Combine and sort data by year and month
+                const combinedData = {};
+                
+                reviewsData.forEach(item => {
+                    const key = `${item.year}-${item.month}`;
+                    if (!combinedData[key]) {
+                        combinedData[key] = { year: item.year, month: item.month, reviews: 0, checkins: 0 };
+                    }
+                    combinedData[key].reviews = item.review_count;
+                });
+                
+                checkinsData.forEach(item => {
+                    const key = `${item.year}-${item.month}`;
+                    if (!combinedData[key]) {
+                        combinedData[key] = { year: item.year, month: item.month, reviews: 0, checkins: 0 };
+                    }
+                    combinedData[key].checkins = item.checkin_count;
+                });
+                
+                // Convert to sorted array
+                const sortedData = Object.values(combinedData).sort((a, b) => {
+                    if (a.year !== b.year) return a.year - b.year;
+                    return a.month - b.month;
+                });
+                
+                // Extract data for chart
+                sortedData.forEach(item => {
+                    labels.push(`${item.year}-${item.month}`);
+                    reviewCounts.push(item.reviews);
+                    checkinCounts.push(item.checkins);
+                });
+                
+                // Create chart
+                const ctx = document.getElementById('mongodbBusinessDetailsChart').getContext('2d');
+                if (window.mongodbBusinessDetailsChart) {
+                    window.mongodbBusinessDetailsChart.destroy();
+                }
+                
+                window.mongodbBusinessDetailsChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Reviews',
+                                data: reviewCounts,
+                                borderColor: '#d32323',
+                                backgroundColor: 'rgba(211, 35, 35, 0.1)',
+                                fill: true,
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Checkins',
+                                data: checkinCounts,
+                                borderColor: '#4682B4',
+                                backgroundColor: 'rgba(70, 130, 180, 0.1)',
+                                fill: true,
+                                tension: 0.1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Monthly Activity'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading business details:', error);
+            }
+        }
+
+        // Load Neo4j Top Businesses
+        async function loadNeo4jBusinesses() {
+            const category = document.getElementById('neo4jCategorySelect').value;
+            const limit = document.getElementById('neo4jLimitSelect').value;
+            
+            // Show loader
+            document.getElementById('neo4jBusinessesLoader').classList.remove('d-none');
+            document.getElementById('neo4jBusinessesTable').innerHTML = '';
+            
+            try {
+                const response = await fetch(`/api/neo4j/top_businesses?category=${encodeURIComponent(category)}&limit=${limit}`);
+                const businesses = await response.json();
+                
+                // Create table
+                let tableHtml = `
+                    <table class="table table-hover business-table">
+                        <thead>
+                            <tr>
+                                <th>Business Name</th>
+                                <th>City</th>
+                                <th>State</th>
+                                <th>Stars</th>
+                                <th>Reviews</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                businesses.forEach(business => {
+                    tableHtml += `
+                        <tr data-business-id="${business.business_id}" onclick="showNeo4jBusinessDetails('${business.business_id}', '${business.business_name}')">
+                            <td>${business.business_name}</td>
+                            <td>${business.city || 'N/A'}</td>
+                            <td>${business.state || 'N/A'}</td>
+                            <td>${business.stars || 'N/A'}</td>
+                            <td>${business.review_count || 'N/A'}</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHtml += `
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('neo4jBusinessesTable').innerHTML = tableHtml;
+            } catch (error) {
+                console.error('Error loading businesses:', error);
+                document.getElementById('neo4jBusinessesTable').innerHTML = '<div class="alert alert-danger">Error loading businesses. Please try again.</div>';
+            } finally {
+                // Hide loader
+                document.getElementById('neo4jBusinessesLoader').classList.add('d-none');
+            }
+        }
+
+        // Show Neo4j Business Details
+        async function showNeo4jBusinessDetails(businessId, businessName) {
+            document.getElementById('neo4jBusinessDetails').classList.remove('d-none');
+            document.getElementById('neo4jBusinessDetailsName').textContent = businessName;
+            
+            try {
+                const response = await fetch(`/api/neo4j/business_performance?business_id=${encodeURIComponent(businessId)}`);
+                const data = await response.json();
+                
+                // Update business details
+                const business = data.business;
+                document.getElementById('neo4jBusinessDetailsLocation').textContent = `${business.city || 'N/A'}, ${business.state || 'N/A'}`;
+                document.getElementById('neo4jBusinessDetailsRating').textContent = `${business.stars || 'N/A'} stars (${business.avg_stars ? business.avg_stars.toFixed(1) : 'N/A'} avg)`;
+                document.getElementById('neo4jBusinessDetailsReviews').textContent = business.review_count || business.total_reviews || 'N/A';
+                document.getElementById('neo4jBusinessDetailsCheckins').textContent = business.checkin_count || 'N/A';
+                
+                // Create chart for reviews and checkins by month
+                const reviewsData = data.reviews_by_month || [];
+                const checkinsData = data.checkins_by_month || [];
+                
+                // Prepare chart data
+                const labels = [];
+                const reviewCounts = [];
+                const checkinCounts = [];
+                
+                // Combine and sort data by year and month
+                const combinedData = {};
+                
+                reviewsData.forEach(item => {
+                    const key = `${item.year}-${item.month}`;
+                    if (!combinedData[key]) {
+                        combinedData[key] = { year: item.year, month: item.month, reviews: 0, checkins: 0 };
+                    }
+                    combinedData[key].reviews = item.review_count;
+                });
+                
+                checkinsData.forEach(item => {
+                    const key = `${item.year}-${item.month}`;
+                    if (!combinedData[key]) {
+                        combinedData[key] = { year: item.year, month: item.month, reviews: 0, checkins: 0 };
+                    }
+                    combinedData[key].checkins = item.checkin_count;
+                });
+                
+                // Convert to sorted array
+                const sortedData = Object.values(combinedData).sort((a, b) => {
+                    if (a.year !== b.year) return a.year - b.year;
+                    return a.month - b.month;
+                });
+                
+                // Extract data for chart
+                sortedData.forEach(item => {
+                    labels.push(`${item.year}-${item.month}`);
+                    reviewCounts.push(item.reviews);
+                    checkinCounts.push(item.checkins);
+                });
+                
+                // Create chart
+                const ctx = document.getElementById('neo4jBusinessDetailsChart').getContext('2d');
+                if (window.neo4jBusinessDetailsChart) {
+                    window.neo4jBusinessDetailsChart.destroy();
+                }
+                
+                window.neo4jBusinessDetailsChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Reviews',
+                                data: reviewCounts,
+                                borderColor: '#d32323',
+                                backgroundColor: 'rgba(211, 35, 35, 0.1)',
+                                fill: true,
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Checkins',
+                                data: checkinCounts,
+                                borderColor: '#4682B4',
+                                backgroundColor: 'rgba(70, 130, 180, 0.1)',
+                                fill: true,
+                                tension: 0.1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Monthly Activity'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading business details:', error);
+            }
+        }
+
+        // Load Neo4j Network Analysis
+        async function loadNeo4jNetwork() {
+            const businessId = document.getElementById('neo4jBusinessIdInput').value.trim();
+            
+            if (!businessId) {
+                alert('Please enter a business ID');
+                return;
+            }
+            
+            // Show loader
+            document.getElementById('neo4jNetworkLoader').classList.remove('d-none');
+            document.getElementById('neo4jNetworkResults').classList.add('d-none');
+            
+            try {
+                const response = await fetch(`/api/neo4j/business_network?business_id=${encodeURIComponent(businessId)}`);
+                const data = await response.json();
+                
+                const categoryRelated = data.category_related || [];
+                const userRelated = data.user_related || [];
+                
+                // Create tables
+                let categoryTableHtml = `
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Business Name</th>
+                                <th>City</th>
+                                <th>Stars</th>
+                                <th>Common Categories</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                categoryRelated.forEach(business => {
+                    categoryTableHtml += `
+                        <tr>
+                            <td>${business.business_name}</td>
+                            <td>${business.city || 'N/A'}, ${business.state || 'N/A'}</td>
+                            <td>${business.stars || 'N/A'}</td>
+                            <td>${business.common_categories || 'N/A'}</td>
+                        </tr>
+                    `;
+                });
+                
+                categoryTableHtml += `
+                        </tbody>
+                    </table>
+                `;
+                
+                let userTableHtml = `
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Business Name</th>
+                                <th>City</th>
+                                <th>Stars</th>
+                                <th>Common Users</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                userRelated.forEach(business => {
+                    userTableHtml += `
+                        <tr>
+                            <td>${business.business_name}</td>
+                            <td>${business.city || 'N/A'}, ${business.state || 'N/A'}</td>
+                            <td>${business.stars || 'N/A'}</td>
+                            <td>${business.common_users || 'N/A'}</td>
+                        </tr>
+                    `;
+                });
+                
+                userTableHtml += `
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('neo4jCategoryRelatedTable').innerHTML = categoryTableHtml;
+                document.getElementById('neo4jUserRelatedTable').innerHTML = userTableHtml;
+                document.getElementById('neo4jNetworkResults').classList.remove('d-none');
+            } catch (error) {
+                console.error('Error loading network analysis:', error);
+                alert('Error loading network analysis. Please check the business ID and try again.');
+            } finally {
+                // Hide loader
+                document.getElementById('neo4jNetworkLoader').classList.add('d-none');
+            }
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check database status on page load
+            checkDatabaseStatus();
+            
+            // MySQL event listeners
+            document.getElementById('loadMySQLBusinesses').addEventListener('click', loadMySQLBusinesses);
+            
+            // MongoDB event listeners
+            document.getElementById('loadMongoDBBusinesses').addEventListener('click', loadMongoDBBusinesses);
+            
+            // Neo4j event listeners
+            document.getElementById('loadNeo4jBusinesses').addEventListener('click', loadNeo4jBusinesses);
+            document.getElementById('loadNeo4jNetwork').addEventListener('click', loadNeo4jNetwork);
+            
+            // Load initial data for first tab
+            loadMySQLBusinesses();
         });
     </script>
 </body>

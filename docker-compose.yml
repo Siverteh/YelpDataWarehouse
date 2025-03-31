@@ -9,6 +9,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_HOST: "%"  # Allow connections from any host
     ports:
       - "3306:3306"
     volumes:
@@ -19,7 +20,7 @@ services:
 
   # MongoDB for document-based NoSQL implementation
   mongodb:
-    image: mongo:latest
+    image: mongo:4.4  # Using a specific version to avoid issues
     container_name: yelp-mongodb
     restart: always
     environment:
@@ -31,16 +32,20 @@ services:
     volumes:
       - mongodb-data:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js
+    command: --wiredTigerCacheSizeGB 0.5  # Reduce memory usage
     networks:
       - yelp-network
 
   # Neo4j for graph-based NoSQL implementation
   neo4j:
-    image: neo4j:latest
+    image: neo4j:4.4  # Using a specific version to avoid issues
     container_name: yelp-neo4j
     restart: always
     environment:
       NEO4J_AUTH: ${NEO4J_AUTH}
+      NEO4J_dbms_memory_heap_initial__size: 512m
+      NEO4J_dbms_memory_heap_max__size: 1G
+      NEO4J_dbms_memory_pagecache_size: 512m
     ports:
       - "7474:7474"  # HTTP
       - "7687:7687"  # Bolt
@@ -79,7 +84,7 @@ services:
     networks:
       - yelp-network
 
-  # Web application
+  # Web application with built-in initialization
   webapp:
     build:
       context: ./webapp
@@ -109,6 +114,7 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - NEO4J_HOST=${NEO4J_HOST}
       - NEO4J_PORT=${NEO4J_PORT}
+      - INITIALIZE_DB=true  # Flag to initialize databases
     networks:
       - yelp-network
 

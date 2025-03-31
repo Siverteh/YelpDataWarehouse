@@ -2,10 +2,15 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
+    python3-dev
 
-# Install dependencies with specific versions
+# Copy requirements and install dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
@@ -14,8 +19,5 @@ COPY . .
 # Explicitly expose the port
 EXPOSE 8080
 
-# Print Python package versions for debugging
-RUN pip freeze
-
-# Start the Flask application with a delay to wait for databases
-CMD ["sh", "-c", "sleep 30 && python app.py"]
+# Start the Flask application
+CMD ["python", "-u", "app.py"]
