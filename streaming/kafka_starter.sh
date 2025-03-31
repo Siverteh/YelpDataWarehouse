@@ -17,7 +17,8 @@ echo "Starting Kafka producer and consumer in background..."
 
 # Start the producer in background with output to producer.log
 echo "Starting producer (output in producer.log)..."
-nohup python kafka_producer.py 2 1000 > producer.log 2>&1 &
+cd $(dirname $0) # Change to script directory
+nohup python3 kafka/producer.py 2 1000 > ../../producer.log 2>&1 &
 PRODUCER_PID=$!
 echo "Producer started with PID: $PRODUCER_PID"
 
@@ -26,7 +27,7 @@ sleep 2
 
 # Start the consumer in background with output to consumer.log
 echo "Starting consumer (output in consumer.log)..."
-nohup python3 kafka_consumer.py > consumer.log 2>&1 &
+nohup python3 kafka/consumer.py > ../../consumer.log 2>&1 &
 CONSUMER_PID=$!
 echo "Consumer started with PID: $CONSUMER_PID"
 
@@ -34,8 +35,8 @@ echo "Kafka streaming services started in the background."
 echo "To view producer logs: tail -f producer.log"
 echo "To view consumer logs: tail -f consumer.log"
 echo "To stop the services, run: kill $PRODUCER_PID $CONSUMER_PID"
-echo "Or find and kill the processes with: ps aux | grep 'kafka_[pc]'"
+echo "Or find and kill the processes with: ps aux | grep 'kafka'"
 
 # Write the PIDs to a file for easy reference
-echo "$PRODUCER_PID $CONSUMER_PID" > kafka_pids.txt
+echo "$PRODUCER_PID $CONSUMER_PID" > ../../kafka_pids.txt
 echo "Process IDs saved to kafka_pids.txt"

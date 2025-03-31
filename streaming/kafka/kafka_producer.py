@@ -28,7 +28,7 @@ class YelpKafkaProducer:
         """Load a list of business IDs from the business dataset."""
         business_ids = []
         try:
-            with open('data/yelp_academic_dataset_business.json', 'r', encoding='utf-8') as f:
+            with open('/app/data/yelp_academic_dataset_business.json', 'r', encoding='utf-8') as f:
                 for i, line in enumerate(f):
                     if i >= 1000:  # Limit to 1000 businesses for demo
                         break
@@ -44,7 +44,7 @@ class YelpKafkaProducer:
         """Load a list of user IDs from the user dataset."""
         user_ids = []
         try:
-            with open('data/yelp_academic_dataset_user.json', 'r', encoding='utf-8') as f:
+            with open('/app/data/yelp_academic_dataset_user.json', 'r', encoding='utf-8') as f:
                 for i, line in enumerate(f):
                     if i >= 1000:  # Limit to 1000 users for demo
                         break

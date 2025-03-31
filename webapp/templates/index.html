@@ -1323,5 +1323,282 @@
             loadMySQLBusinesses();
         });
     </script>
+    <script>
+        // Load overview stats when page loads or tab is activated
+        async function loadMySQLOverviewStats() {
+            try {
+                const response = await fetch('/api/mysql/overview_stats');
+                const data = await response.json();
+                
+                // Update the stats counts
+                document.getElementById('mysql-business-count').textContent = data.business_count;
+                document.getElementById('mysql-review-count').textContent = data.review_count;
+                document.getElementById('mysql-user-count').textContent = data.user_count;
+                
+                // Create or update category chart
+                const categoryLabels = data.category_stats.map(item => item.category_name);
+                const categoryCounts = data.category_stats.map(item => item.count);
+                
+                const categoryCtx = document.getElementById('mysqlCategoriesChart').getContext('2d');
+                if (window.mysqlCategoriesChart) {
+                    window.mysqlCategoriesChart.destroy();
+                }
+                
+                window.mysqlCategoriesChart = new Chart(categoryCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: categoryLabels,
+                        datasets: [{
+                            label: 'Businesses per Category',
+                            data: categoryCounts,
+                            backgroundColor: 'rgba(211, 35, 35, 0.7)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+                
+                // Create or update stars chart
+                const starLabels = data.star_distribution.map(item => `${item.stars} Stars`);
+                const starCounts = data.star_distribution.map(item => item.count);
+                
+                const starsCtx = document.getElementById('mysqlStarsChart').getContext('2d');
+                if (window.mysqlStarsChart) {
+                    window.mysqlStarsChart.destroy();
+                }
+                
+                window.mysqlStarsChart = new Chart(starsCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: starLabels,
+                        datasets: [{
+                            data: starCounts,
+                            backgroundColor: [
+                                'rgba(52, 152, 219, 0.8)', // 1 star
+                                'rgba(46, 204, 113, 0.8)', // 2 stars
+                                'rgba(241, 196, 15, 0.8)', // 3 stars
+                                'rgba(230, 126, 34, 0.8)', // 4 stars
+                                'rgba(211, 35, 35, 0.8)'   // 5 stars
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading MySQL overview stats:', error);
+            }
+        }
+        
+        async function loadMongoDBOverviewStats() {
+            try {
+                const response = await fetch('/api/mongodb/overview_stats');
+                const data = await response.json();
+                
+                // Update the stats counts
+                document.getElementById('mongodb-business-count').textContent = data.business_count;
+                document.getElementById('mongodb-review-count').textContent = data.review_count;
+                document.getElementById('mongodb-user-count').textContent = data.user_count;
+                
+                // Create or update category chart
+                const categoryLabels = data.category_stats.map(item => item.category);
+                const categoryCounts = data.category_stats.map(item => item.count);
+                
+                const categoryCtx = document.getElementById('mongodbCategoriesChart').getContext('2d');
+                if (window.mongodbCategoriesChart) {
+                    window.mongodbCategoriesChart.destroy();
+                }
+                
+                window.mongodbCategoriesChart = new Chart(categoryCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: categoryLabels,
+                        datasets: [{
+                            label: 'Businesses per Category',
+                            data: categoryCounts,
+                            backgroundColor: 'rgba(52, 152, 219, 0.7)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+                
+                // Create or update stars chart
+                const starLabels = data.star_distribution.map(item => `${item.stars} Stars`);
+                const starCounts = data.star_distribution.map(item => item.count);
+                
+                const starsCtx = document.getElementById('mongodbStarsChart').getContext('2d');
+                if (window.mongodbStarsChart) {
+                    window.mongodbStarsChart.destroy();
+                }
+                
+                window.mongodbStarsChart = new Chart(starsCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: starLabels,
+                        datasets: [{
+                            data: starCounts,
+                            backgroundColor: [
+                                'rgba(52, 152, 219, 0.8)', // 1 star
+                                'rgba(46, 204, 113, 0.8)', // 2 stars
+                                'rgba(241, 196, 15, 0.8)', // 3 stars
+                                'rgba(230, 126, 34, 0.8)', // 4 stars
+                                'rgba(211, 35, 35, 0.8)'   // 5 stars
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading MongoDB overview stats:', error);
+            }
+        }
+        
+        async function loadNeo4jOverviewStats() {
+            try {
+                const response = await fetch('/api/neo4j/overview_stats');
+                const data = await response.json();
+                
+                // Update the stats counts
+                document.getElementById('neo4j-business-count').textContent = data.business_count;
+                document.getElementById('neo4j-review-count').textContent = data.review_count;
+                document.getElementById('neo4j-user-count').textContent = data.user_count;
+                document.getElementById('neo4j-relationship-count').textContent = data.relationship_count;
+                
+                // Create or update category chart
+                const categoryLabels = data.category_stats.map(item => item.category);
+                const categoryCounts = data.category_stats.map(item => item.count);
+                
+                const categoryCtx = document.getElementById('neo4jCategoriesChart').getContext('2d');
+                if (window.neo4jCategoriesChart) {
+                    window.neo4jCategoriesChart.destroy();
+                }
+                
+                window.neo4jCategoriesChart = new Chart(categoryCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: categoryLabels,
+                        datasets: [{
+                            label: 'Businesses per Category',
+                            data: categoryCounts,
+                            backgroundColor: 'rgba(46, 204, 113, 0.7)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+                
+                // Create or update relationships chart
+                const relationshipLabels = data.relationship_stats.map(item => item.type);
+                const relationshipCounts = data.relationship_stats.map(item => item.count);
+                
+                const relationshipsCtx = document.getElementById('neo4jRelationshipsChart').getContext('2d');
+                if (window.neo4jRelationshipsChart) {
+                    window.neo4jRelationshipsChart.destroy();
+                }
+                
+                window.neo4jRelationshipsChart = new Chart(relationshipsCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: relationshipLabels,
+                        datasets: [{
+                            data: relationshipCounts,
+                            backgroundColor: [
+                                'rgba(52, 152, 219, 0.8)',
+                                'rgba(46, 204, 113, 0.8)',
+                                'rgba(241, 196, 15, 0.8)',
+                                'rgba(230, 126, 34, 0.8)',
+                                'rgba(211, 35, 35, 0.8)',
+                                'rgba(155, 89, 182, 0.8)',
+                                'rgba(26, 188, 156, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading Neo4j overview stats:', error);
+            }
+        }
+        
+        // Add event listeners for tab changes to load data for the appropriate tab
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial data loading
+            loadMySQLOverviewStats();
+            
+            // Listen for tab changes - MySQL
+            document.getElementById('mysql-tab').addEventListener('shown.bs.tab', function (e) {
+                // Check if the overview tab is active
+                if (document.getElementById('mysql-overview-tab').classList.contains('active')) {
+                    loadMySQLOverviewStats();
+                }
+            });
+            
+            document.getElementById('mysql-overview-tab').addEventListener('shown.bs.tab', function (e) {
+                loadMySQLOverviewStats();
+            });
+            
+            // Listen for tab changes - MongoDB
+            document.getElementById('mongodb-tab').addEventListener('shown.bs.tab', function (e) {
+                // Check if the overview tab is active
+                if (document.getElementById('mongodb-overview-tab').classList.contains('active')) {
+                    loadMongoDBOverviewStats();
+                }
+            });
+            
+            document.getElementById('mongodb-overview-tab').addEventListener('shown.bs.tab', function (e) {
+                loadMongoDBOverviewStats();
+            });
+            
+            // Listen for tab changes - Neo4j
+            document.getElementById('neo4j-tab').addEventListener('shown.bs.tab', function (e) {
+                // Check if the overview tab is active
+                if (document.getElementById('neo4j-overview-tab').classList.contains('active')) {
+                    loadNeo4jOverviewStats();
+                }
+            });
+            
+            document.getElementById('neo4j-overview-tab').addEventListener('shown.bs.tab', function (e) {
+                loadNeo4jOverviewStats();
+            });
+            
+            // Fix any bootstrap v5 tab event listener issues
+            const triggerTabList = [].slice.call(document.querySelectorAll('#mainTabs button, #mysqlDashboardTabs button, #mongodbDashboardTabs button, #neo4jDashboardTabs button'));
+            triggerTabList.forEach(function(triggerEl) {
+                const tabTrigger = new bootstrap.Tab(triggerEl);
+                
+                triggerEl.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    tabTrigger.show();
+                });
+            });
+        });
+        </script>
 </body>
 </html>
