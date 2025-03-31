@@ -25,10 +25,12 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: yelp_db
     ports:
       - "27017:27017"
     volumes:
       - mongodb-data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js
     networks:
       - yelp-network
 
@@ -81,7 +83,6 @@ services:
   webapp:
     build:
       context: ./webapp
-      dockerfile: Dockerfile
     container_name: yelp-webapp
     restart: always
     depends_on:
@@ -91,8 +92,6 @@ services:
       - kafka
     ports:
       - "${WEBAPP_PORT}:8080"
-    volumes:
-      - ./webapp:/app
     environment:
       - FLASK_APP=${FLASK_APP}
       - FLASK_ENV=${FLASK_ENV}
@@ -102,14 +101,14 @@ services:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - MONGO_HOST=${MONGO_HOST}
-      - MONGO_PORT=${MONGO_PORT}
       - MONGO_USER=${MONGO_INITDB_ROOT_USERNAME}
       - MONGO_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
-      - NEO4J_HOST=${NEO4J_HOST}
-      - NEO4J_PORT=${NEO4J_PORT}
+      - MONGO_HOST=${MONGO_HOST}
+      - MONGO_PORT=${MONGO_PORT}
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_HOST=${NEO4J_HOST}
+      - NEO4J_PORT=${NEO4J_PORT}
     networks:
       - yelp-network
 
