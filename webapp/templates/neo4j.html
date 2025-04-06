@@ -1,0 +1,194 @@
+<!-- Dashboard Navigation Pills -->
+<ul class="nav nav-pills mb-4" id="neo4jDashboardTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="neo4j-overview-tab" data-bs-toggle="pill" data-bs-target="#neo4j-overview" type="button" role="tab">Overview</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="neo4j-businesses-tab" data-bs-toggle="pill" data-bs-target="#neo4j-businesses" type="button" role="tab">Businesses</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="neo4j-network-tab" data-bs-toggle="pill" data-bs-target="#neo4j-network" type="button" role="tab">Network Analysis</button>
+    </li>
+</ul>
+
+<!-- Neo4j Dashboard Pill Content -->
+<div class="tab-content" id="neo4jDashboardTabsContent">
+    <!-- Neo4j Overview -->
+    <div class="tab-pane fade show active" id="neo4j-overview" role="tabpanel">
+        <div class="row">
+            <!-- Stats Cards -->
+            <div class="col-md-3">
+                <div class="card card-dashboard stats-card">
+                    <div class="stats-icon text-primary">
+                        <i class="bi bi-shop fs-1"></i>
+                    </div>
+                    <div class="stats-number" id="neo4j-business-count">-</div>
+                    <div class="stats-label">Businesses</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-dashboard stats-card">
+                    <div class="stats-icon text-success">
+                        <i class="bi bi-star fs-1"></i>
+                    </div>
+                    <div class="stats-number" id="neo4j-review-count">-</div>
+                    <div class="stats-label">Reviews</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-dashboard stats-card">
+                    <div class="stats-icon text-info">
+                        <i class="bi bi-people fs-1"></i>
+                    </div>
+                    <div class="stats-number" id="neo4j-user-count">-</div>
+                    <div class="stats-label">Users</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card card-dashboard stats-card">
+                    <div class="stats-icon text-warning">
+                        <i class="bi bi-diagram-3 fs-1"></i>
+                    </div>
+                    <div class="stats-number" id="neo4j-relationship-count">-</div>
+                    <div class="stats-label">Relationships</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Categories Chart -->
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card card-dashboard h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Top Categories</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="neo4jCategoriesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card card-dashboard h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Relationship Types</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="neo4jRelationshipsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Neo4j Businesses -->
+    <div class="tab-pane fade" id="neo4j-businesses" role="tabpanel">
+        <div class="card card-dashboard">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Top Businesses</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="neo4jCategorySelect" class="form-label">Category:</label>
+                        <select id="neo4jCategorySelect" class="form-select">
+                            <option value="Restaurants">Restaurants</option>
+                            <option value="Shopping">Shopping</option>
+                            <option value="Food">Food</option>
+                            <option value="Beauty & Spas">Beauty & Spas</option>
+                            <option value="Home Services">Home Services</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="neo4jLimitSelect" class="form-label">Limit:</label>
+                        <select id="neo4jLimitSelect" class="form-select">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button id="loadNeo4jBusinesses" class="btn btn-primary w-100">Load Data</button>
+                    </div>
+                </div>
+                
+                <div id="neo4jBusinessesLoader" class="loader d-none"></div>
+                <div id="neo4jBusinessesTable"></div>
+            </div>
+        </div>
+
+        <!-- Business Details -->
+        <div id="neo4jBusinessDetails" class="business-details-card d-none">
+            <div class="card card-dashboard">
+                <div class="card-header">
+                    <h5 class="card-title mb-0" id="neo4jBusinessDetailsName">Business Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Business Information</h6>
+                            <dl class="row">
+                                <dt class="col-sm-4">Location:</dt>
+                                <dd class="col-sm-8" id="neo4jBusinessDetailsLocation"></dd>
+                                <dt class="col-sm-4">Rating:</dt>
+                                <dd class="col-sm-8" id="neo4jBusinessDetailsRating"></dd>
+                                <dt class="col-sm-4">Reviews:</dt>
+                                <dd class="col-sm-8" id="neo4jBusinessDetailsReviews"></dd>
+                                <dt class="col-sm-4">Checkins:</dt>
+                                <dd class="col-sm-8" id="neo4jBusinessDetailsCheckins"></dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <canvas id="neo4jBusinessDetailsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Neo4j Network Analysis -->
+    <div class="tab-pane fade" id="neo4j-network" role="tabpanel">
+        <div class="card card-dashboard">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Business Network Analysis</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-9">
+                        <label for="neo4jBusinessIdInput" class="form-label">Enter Business ID:</label>
+                        <input type="text" id="neo4jBusinessIdInput" class="form-control" placeholder="e.g., sample_business_neo4j_1">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button id="loadNeo4jNetwork" class="btn btn-primary w-100">Analyze Network</button>
+                    </div>
+                </div>
+                
+                <div id="neo4jNetworkLoader" class="loader d-none"></div>
+                <div id="neo4jNetworkResults" class="d-none">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Related by Category</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="neo4jCategoryRelatedTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Related by User Reviews</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="neo4jUserRelatedTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
