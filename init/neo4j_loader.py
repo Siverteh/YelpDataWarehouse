@@ -369,9 +369,9 @@ def _load_review_batch_neo4j(session, reviews):
                 'funny': review.get('funny', 0),
                 'cool': review.get('cool', 0),
                 'text': review.get('text', ''),
-                'date': review['date'],
-                'year': int(review['date'].split('-')[0]),
-                'month': int(review['date'].split('-')[1])
+                'date': review['date'].split()[0],  # Extract just the date part (split on space)
+                'year': int(review['date'].split()[0].split('-')[0]),  # Get year from date part
+                'month': int(review['date'].split()[0].split('-')[1])  # Get month from date part
             })
         
         return True
@@ -515,9 +515,9 @@ def _load_tip_batch_neo4j(session, tips):
                 'business_id': tip['business_id'],
                 'user_id': tip['user_id'],
                 'text': tip['text'],
-                'date': tip['date'],
-                'year': int(tip['date'].split('-')[0]),
-                'month': int(tip['date'].split('-')[1]),
+                'date': tip['date'].split()[0],  # Extract just the date part
+                'year': int(tip['date'].split()[0].split('-')[0]),
+                'month': int(tip['date'].split()[0].split('-')[1]),
                 'compliment_count': tip.get('compliment_count', 0)
             })
         

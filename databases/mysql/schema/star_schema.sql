@@ -67,6 +67,7 @@ CREATE TABLE fact_review (
     useful_votes INT NOT NULL,
     funny_votes INT NOT NULL,
     cool_votes INT NOT NULL,
+    text TEXT,  <!-- Add this line -->
     FOREIGN KEY (business_id) REFERENCES dim_business(business_id),
     FOREIGN KEY (user_id) REFERENCES dim_user(user_id),
     FOREIGN KEY (time_id) REFERENCES dim_time(time_id)

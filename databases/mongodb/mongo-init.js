@@ -1,4 +1,12 @@
-// Create a yelp_db database
+// First create the admin user
+db = db.getSiblingDB('admin');
+db.createUser({
+  user: "user",
+  pwd: "user",
+  roles: [{ role: "root", db: "admin" }]
+});
+
+// Then initialize our database
 db = db.getSiblingDB('yelp_db');
 
 // Create collections

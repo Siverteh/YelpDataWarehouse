@@ -590,7 +590,8 @@ def load_reviews(cursor, file_path, batch_size=1000):
                 
                 # Parse date and get time_id
                 try:
-                    review_date = datetime.strptime(review['date'], '%Y-%m-%d').strftime('%Y-%m-%d')
+                    date_str = review['date'].split()[0]  # Split by whitespace and take first part
+                    review_date = datetime.strptime(date_str, '%Y-%m-%d').strftime('%Y-%m-%d')
                     if review_date not in time_lookup:
                         # Date not in time dimension, try to add it
                         date_obj = datetime.strptime(review_date, '%Y-%m-%d')
@@ -889,7 +890,8 @@ def load_tips(cursor, file_path, batch_size=1000):
                 
                 # Parse date and get time_id
                 try:
-                    tip_date = datetime.strptime(tip['date'], '%Y-%m-%d').strftime('%Y-%m-%d')
+                    date_str = tip['date'].split()[0]  # Split by whitespace and take first part
+                    tip_date = datetime.strptime(date_str, '%Y-%m-%d').strftime('%Y-%m-%d')
                     if tip_date not in time_lookup:
                         # Date not in time dimension, try to add it
                         date_obj = datetime.strptime(tip_date, '%Y-%m-%d')

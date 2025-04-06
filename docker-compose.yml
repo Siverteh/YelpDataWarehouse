@@ -41,7 +41,7 @@ services:
     networks:
       - yelp-network
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongo mongodb:27017/test --quiet
+      test: mongo --eval "printjson(db.serverStatus())" --noauth || exit 1
       interval: 10s
       timeout: 5s
       retries: 5
@@ -115,13 +115,11 @@ services:
     build:
       context: ./init
     container_name: yelp-initializer
+    tty: true  # Add this to keep the container running
     depends_on:
-      mysql:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
+      - mysql  # Remove the condition
+      - mongodb
+      - neo4j
     environment:
       - MYSQL_HOST=${MYSQL_HOST}
       - MYSQL_PORT=${MYSQL_PORT}
@@ -138,8 +136,10 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
     volumes:
       - ./databases:/app/databases
+      - ./data:/app/data
     networks:
       - yelp-network
+  # No healthcheck dependency
 
   # Web application
   webapp:

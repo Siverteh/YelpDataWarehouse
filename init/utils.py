@@ -24,7 +24,7 @@ def get_config():
             'port': int(os.environ.get('MONGO_PORT', 27017)),
             'user': os.environ.get('MONGO_USER', 'user'),
             'password': os.environ.get('MONGO_PASSWORD', 'user'),
-            'uri': f"mongodb://{os.environ.get('MONGO_USER', 'user')}:{os.environ.get('MONGO_PASSWORD', 'user')}@{os.environ.get('MONGO_HOST', 'mongodb')}:{os.environ.get('MONGO_PORT', 27017)}/"
+            'uri': f"mongodb://{os.environ.get('MONGO_HOST', 'mongodb')}:{os.environ.get('MONGO_PORT', 27017)}/"  # Direct connection
         },
         'neo4j': {
             'host': os.environ.get('NEO4J_HOST', 'neo4j'),

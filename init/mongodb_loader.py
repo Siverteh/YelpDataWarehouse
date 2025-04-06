@@ -194,7 +194,8 @@ def load_reviews(db, file_path, batch_size=1000):
                     # Convert date to date object
                     if 'date' in review:
                         try:
-                            review['date'] = datetime.strptime(review['date'], '%Y-%m-%d')
+                            date_str = review['date'].split()[0]
+                            review['date'] = datetime.strptime(date_str, '%Y-%m-%d')
                         except:
                             pass
                     
@@ -298,7 +299,8 @@ def load_tips(db, file_path, batch_size=1000):
                     # Convert date to date object
                     if 'date' in tip:
                         try:
-                            tip['date'] = datetime.strptime(tip['date'], '%Y-%m-%d')
+                            date_str = tip['date'].split()[0]  # Split by whitespace and take first part
+                            tip_date = datetime.strptime(date_str, '%Y-%m-%d').strftime('%Y-%m-%d')
                         except:
                             pass
                     
