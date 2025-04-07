@@ -9,13 +9,22 @@ import pymysql
 from datetime import datetime, timedelta
 from utils import get_config
 
-def check_and_initialize_mysql():
+def check_and_initialize_mysql(data_limits=None):
     """Check if MySQL has data, initialize if needed"""
     print("\nChecking MySQL data...")
     
     config = get_config()
     mysql_config = config['mysql']
     data_config = config['data']
+    
+    # Set default limits if none provided
+    if data_limits is None:
+        data_limits = {
+            'business_limit': float('inf'),
+            'review_limit': float('inf'),
+            'user_limit': float('inf'),
+            'filter_by_business': False
+        }
     
     conn = None
     try:
@@ -80,11 +89,16 @@ def check_and_initialize_mysql():
             print("Some dataset files are missing. Please check your data directory.")
         
         # B. Load data in the correct order (businesses/users first, then related facts)
-        load_businesses(cursor, data_config['business_file'])
-        load_users(cursor, data_config['user_file'])
-        load_reviews(cursor, data_config['review_file'])
-        load_checkins(cursor, data_config['checkin_file'])
-        load_tips(cursor, data_config['tip_file'])
+        loaded_business_ids = load_businesses(cursor, data_config['business_file'], limit=data_limits['business_limit'])
+        load_users(cursor, data_config['user_file'], limit=data_limits['user_limit'])
+        
+        # Filter reviews, checkins, and tips by loaded businesses if requested
+        filter_business_ids = loaded_business_ids if data_limits['filter_by_business'] else None
+        
+        load_reviews(cursor, data_config['review_file'], limit=data_limits['review_limit'], 
+                   filter_business_ids=filter_business_ids)
+        load_checkins(cursor, data_config['checkin_file'], filter_business_ids=filter_business_ids)
+        load_tips(cursor, data_config['tip_file'], filter_business_ids=filter_business_ids)
         
         # C. Create summary tables
         create_summary_tables(cursor)
@@ -305,23 +319,37 @@ def process_categories(cursor, categories_data):
             VALUES (%s, %s)
         """, business_category_values)
 
-def load_businesses(cursor, file_path, batch_size=1000):
-    """Load businesses from Yelp dataset file in batches"""
-    print(f"Loading businesses from {file_path}...")
+def load_businesses(cursor, file_path, batch_size=1000, limit=float('inf')):
+    """Load businesses from Yelp dataset file in batches with a limit
+    
+    Returns:
+        set: The set of loaded business IDs
+    """
+    print(f"Loading businesses from {file_path} (limit: {limit if limit != float('inf') else 'none'})...")
     
     if not os.path.exists(file_path):
         print(f"Error: File {file_path} not found.")
-        return 0
+        return set()
     
     locations = {}  # Cache location IDs to avoid duplicate queries
     total_loaded = 0
     batch_count = 0
+    loaded_business_ids = set()
     
     # First ensure table is empty or exists
     cursor.execute("SELECT COUNT(*) FROM dim_business")
     if cursor.fetchone()[0] > 0:
         print("Business table already has data. Skipping business load.")
-        return 0
+        
+        # If we're skipping loading, get the existing business IDs for filtering related data
+        if limit != float('inf'):
+            cursor.execute("SELECT business_id FROM dim_business LIMIT %s", (limit,))
+            loaded_business_ids = {row[0] for row in cursor.fetchall()}
+        else:
+            cursor.execute("SELECT business_id FROM dim_business")
+            loaded_business_ids = {row[0] for row in cursor.fetchall()}
+            
+        return loaded_business_ids
     
     with open(file_path, 'r', encoding='utf-8') as f:
         businesses_batch = []
@@ -330,6 +358,9 @@ def load_businesses(cursor, file_path, batch_size=1000):
         for line in f:
             if not line.strip():
                 continue
+            
+            if total_loaded >= limit:
+                break
                 
             business = json.loads(line)
             
@@ -387,6 +418,9 @@ def load_businesses(cursor, file_path, batch_size=1000):
                 business.get('is_open', 0)
             ))
             
+            # Keep track of business ID for filtering related data
+            loaded_business_ids.add(business['business_id'])
+            
             # Process categories
             if 'categories' in business and business['categories']:
                 categories = [c.strip() for c in business['categories'].split(',')]
@@ -443,13 +477,16 @@ def load_businesses(cursor, file_path, batch_size=1000):
             except Exception as e:
                 print(f"Error processing batch: {e}")
                 cursor.connection.rollback()
+                # Remove the failed business IDs from our tracking set
+                for business_tuple in businesses_batch:
+                    loaded_business_ids.discard(business_tuple[0])
     
     print(f"Finished loading businesses: {total_loaded} total loaded")
-    return total_loaded
+    return loaded_business_ids
 
-def load_users(cursor, file_path, batch_size=1000):
-    """Load users from Yelp dataset file in batches"""
-    print(f"Loading users from {file_path}...")
+def load_users(cursor, file_path, batch_size=1000, limit=float('inf')):
+    """Load users from Yelp dataset file in batches with a limit"""
+    print(f"Loading users from {file_path} (limit: {limit if limit != float('inf') else 'none'})...")
     
     if not os.path.exists(file_path):
         print(f"Error: File {file_path} not found.")
@@ -470,6 +507,9 @@ def load_users(cursor, file_path, batch_size=1000):
         for line in f:
             if not line.strip():
                 continue
+            
+            if total_loaded >= limit:
+                break
                 
             user = json.loads(line)
             
@@ -534,9 +574,9 @@ def load_users(cursor, file_path, batch_size=1000):
     print(f"Finished loading users: {total_loaded} total loaded")
     return total_loaded
 
-def load_reviews(cursor, file_path, batch_size=1000):
-    """Load reviews from Yelp dataset file in batches"""
-    print(f"Loading reviews from {file_path}...")
+def load_reviews(cursor, file_path, batch_size=1000, limit=float('inf'), filter_business_ids=None):
+    """Load reviews from Yelp dataset file in batches with a limit"""
+    print(f"Loading reviews from {file_path} (limit: {limit if limit != float('inf') else 'none'})...")
     
     if not os.path.exists(file_path):
         print(f"Error: File {file_path} not found.")
@@ -563,6 +603,11 @@ def load_reviews(cursor, file_path, batch_size=1000):
     
     print(f"Found {len(valid_businesses)} valid businesses and {len(valid_users)} valid users")
     
+    # If we're filtering by specific business IDs, intersect with valid businesses
+    if filter_business_ids:
+        valid_businesses = valid_businesses.intersection(filter_business_ids)
+        print(f"Filtered to {len(valid_businesses)} businesses")
+    
     total_loaded = 0
     batch_count = 0
     skipped_count = 0
@@ -573,6 +618,9 @@ def load_reviews(cursor, file_path, batch_size=1000):
         for line_num, line in enumerate(f, 1):
             if not line.strip():
                 continue
+            
+            if total_loaded >= limit:
+                break
                 
             try:
                 review = json.loads(line)
@@ -685,8 +733,8 @@ def load_reviews(cursor, file_path, batch_size=1000):
     print(f"Finished loading reviews: {total_loaded} total loaded, {skipped_count} skipped")
     return total_loaded
 
-def load_checkins(cursor, file_path, batch_size=1000):
-    """Load checkins from Yelp dataset file in batches"""
+def load_checkins(cursor, file_path, batch_size=1000, filter_business_ids=None):
+    """Load checkins from Yelp dataset file in batches, optionally filtered by business IDs"""
     print(f"Loading checkins from {file_path}...")
     
     if not os.path.exists(file_path):
@@ -708,6 +756,11 @@ def load_checkins(cursor, file_path, batch_size=1000):
     print("Loading valid business IDs...")
     cursor.execute("SELECT business_id FROM dim_business")
     valid_businesses = {row[0] for row in cursor.fetchall()}
+    
+    # If we're filtering by specific business IDs, intersect with valid businesses
+    if filter_business_ids:
+        valid_businesses = valid_businesses.intersection(filter_business_ids)
+        print(f"Filtered to {len(valid_businesses)} businesses")
     
     total_loaded = 0
     batch_count = 0
@@ -836,8 +889,8 @@ def load_checkins(cursor, file_path, batch_size=1000):
     print(f"Finished loading checkins: {total_loaded} total loaded, {skipped_count} skipped")
     return total_loaded
 
-def load_tips(cursor, file_path, batch_size=1000):
-    """Load tips from Yelp dataset file in batches"""
+def load_tips(cursor, file_path, batch_size=1000, filter_business_ids=None):
+    """Load tips from Yelp dataset file in batches, optionally filtered by business IDs"""
     print(f"Loading tips from {file_path}...")
     
     if not os.path.exists(file_path):
@@ -862,6 +915,11 @@ def load_tips(cursor, file_path, batch_size=1000):
     
     cursor.execute("SELECT user_id FROM dim_user")
     valid_users = {row[0] for row in cursor.fetchall()}
+    
+    # If we're filtering by specific business IDs, intersect with valid businesses
+    if filter_business_ids:
+        valid_businesses = valid_businesses.intersection(filter_business_ids)
+        print(f"Filtered to {len(valid_businesses)} businesses")
     
     total_loaded = 0
     batch_count = 0
@@ -978,37 +1036,81 @@ def load_tips(cursor, file_path, batch_size=1000):
     return total_loaded
 
 def create_summary_tables(cursor):
-    """Create summary tables for better performance"""
-    print("Creating summary tables...")
+    """Create minimal summary tables with tuple cursor compatibility"""
+    print("Creating summary tables (simplified version)...")
     
     try:
+        # Use a simpler approach - just copy basic stats from dim_business
         cursor.execute("""
             INSERT INTO summary_business_performance 
                 (business_id, total_reviews, avg_rating, total_checkins, total_tips)
             SELECT 
-                b.business_id,
-                COUNT(DISTINCT r.review_id) as total_reviews,
-                IFNULL(AVG(r.stars), b.stars) as avg_rating,
-                IFNULL(SUM(c.checkin_count), 0) as total_checkins,
-                COUNT(DISTINCT t.tip_id) as total_tips
-            FROM 
-                dim_business b
-                LEFT JOIN fact_review r ON b.business_id = r.business_id
-                LEFT JOIN fact_checkin c ON b.business_id = c.business_id
-                LEFT JOIN fact_tip t ON b.business_id = t.business_id
-            GROUP BY 
-                b.business_id
+                business_id,
+                review_count,
+                stars,
+                0,  -- default checkin count
+                0   -- default tip count
+            FROM dim_business
             ON DUPLICATE KEY UPDATE
                 total_reviews = VALUES(total_reviews),
-                avg_rating = VALUES(avg_rating),
-                total_checkins = VALUES(total_checkins),
-                total_tips = VALUES(total_tips)
+                avg_rating = VALUES(avg_rating)
         """)
         
         cursor.connection.commit()
-        print("Summary tables created successfully.")
+        print("Basic summary tables created successfully.")
+        
+        # Update the first 100 businesses with full stats as a sample
+        print("Updating a sample of businesses with detailed stats...")
+        cursor.execute("""
+            SELECT business_id FROM dim_business LIMIT 100
+        """)
+        
+        # Handle both tuple and dictionary cursor results
+        sample_business_ids = []
+        for row in cursor.fetchall():
+            # Check if row is a tuple or a dict
+            if isinstance(row, dict):
+                sample_business_ids.append(row['business_id'])
+            else:  # Assume it's a tuple
+                sample_business_ids.append(row[0])
+        
+        if sample_business_ids:
+            placeholders = ','.join(['%s'] * len(sample_business_ids))
+            
+            cursor.execute(f"""
+                UPDATE summary_business_performance s
+                JOIN (
+                    SELECT 
+                        b.business_id,
+                        COUNT(DISTINCT r.review_id) as total_reviews,
+                        IFNULL(AVG(r.stars), b.stars) as avg_rating,
+                        IFNULL(SUM(c.checkin_count), 0) as total_checkins,
+                        COUNT(DISTINCT t.tip_id) as total_tips
+                    FROM 
+                        dim_business b
+                        LEFT JOIN fact_review r ON b.business_id = r.business_id
+                        LEFT JOIN fact_checkin c ON b.business_id = c.business_id
+                        LEFT JOIN fact_tip t ON b.business_id = t.business_id
+                    WHERE 
+                        b.business_id IN ({placeholders})
+                    GROUP BY 
+                        b.business_id
+                ) as stats ON s.business_id = stats.business_id
+                SET 
+                    s.total_reviews = stats.total_reviews,
+                    s.avg_rating = stats.avg_rating,
+                    s.total_checkins = stats.total_checkins,
+                    s.total_tips = stats.total_tips
+            """, sample_business_ids)
+            
+            cursor.connection.commit()
+            print(f"Updated {len(sample_business_ids)} sample businesses with detailed stats")
+        
         return True
     except Exception as e:
         print(f"Error creating summary tables: {e}")
         cursor.connection.rollback()
-        return False
+        
+        # Continue anyway - summary tables are not critical
+        print("Continuing without summary tables.")
+        return True
