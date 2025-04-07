@@ -137,3 +137,28 @@ def test():
         "message": "API is working",
         "timestamp": datetime.now().isoformat()
     })
+
+# Add to webapp/utility_routes.py
+
+@utility_bp.route('/broadcast', methods=['POST'])
+def broadcast_event():
+    """Endpoint to receive events from Kafka consumer and broadcast to WebSocket clients"""
+    try:
+        data = request.json
+        if not data or 'database' not in data or 'event_type' not in data:
+            return jsonify({"error": "Invalid payload"}), 400
+        
+        # Import broadcast_update from app.py
+        from app import broadcast_update
+        
+        # Broadcast the update to connected clients
+        broadcast_update(
+            data['database'],
+            data['event_type'],
+            data['data']
+        )
+        
+        return jsonify({"status": "success"})
+    except Exception as e:
+        logger.error(f"Error in broadcast_event: {str(e)}")
+        return jsonify({"error": str(e)}), 500

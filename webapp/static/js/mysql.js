@@ -140,7 +140,9 @@ async function loadMySQLBusinesses() {
 
 // Show MySQL Business Details
 async function showMySQLBusinessDetails(businessId, businessName) {
-    document.getElementById('mysqlBusinessDetails').classList.remove('d-none');
+    const businessDetails = document.getElementById('mysqlBusinessDetails');
+    businessDetails.classList.remove('d-none');
+    businessDetails.setAttribute('data-business-id', businessId); // Add this line
     document.getElementById('mysqlBusinessDetailsName').textContent = businessName;
     
     try {

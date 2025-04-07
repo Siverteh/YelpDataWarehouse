@@ -3,6 +3,7 @@ import time
 import threading
 import pymysql
 import pymongo
+import requests
 from neo4j import GraphDatabase
 from kafka import KafkaConsumer
 from datetime import datetime
@@ -92,6 +93,34 @@ class YelpKafkaConsumer:
         except Exception as e:
             print(f"Neo4j connection error: {e}")
             self.neo4j_driver = None
+    
+    def _broadcast_event(self, database, event_type, data):
+        """
+        Send event data to the web application for broadcasting to connected clients
+        
+        Args:
+            database (str): The database that was updated ('mysql', 'mongodb', or 'neo4j')
+            event_type (str): The type of event ('review', 'checkin', etc.)
+            data (dict): The event data
+        """
+        # Get the webapp URL from environment or use default
+        webapp_url = "http://webapp:8080"
+        broadcast_endpoint = f"{webapp_url}/api/broadcast"
+        
+        payload = {
+            'database': database,
+            'event_type': event_type,
+            'data': data
+        }
+        
+        try:
+            response = requests.post(broadcast_endpoint, json=payload, timeout=5)
+            if response.status_code == 200:
+                print(f"Successfully broadcast {event_type} event for {database}")
+            else:
+                print(f"Failed to broadcast event: {response.status_code} - {response.text}")
+        except Exception as e:
+            print(f"Error broadcasting event: {e}")
     
     def process_messages(self):
         """Process messages from Kafka topics."""
@@ -305,6 +334,15 @@ class YelpKafkaConsumer:
                 review.get('stars', 0),
                 review.get('stars', 0)
             ))
+            
+            # Broadcast the event
+            self._broadcast_event('mysql', 'review', {
+                'review_id': review['review_id'],
+                'business_id': review['business_id'],
+                'user_id': review['user_id'],
+                'stars': review.get('stars', 0),
+                'date': review.get('date')
+            })
         
         finally:
             cursor.close()
@@ -347,6 +385,13 @@ class YelpKafkaConsumer:
                 checkin.get('count', 1),
                 checkin.get('count', 1)
             ))
+            
+            # Broadcast the event
+            self._broadcast_event('mysql', 'checkin', {
+                'business_id': checkin['business_id'],
+                'date': checkin.get('date'),
+                'count': checkin.get('count', 1)
+            })
         
         finally:
             cursor.close()
@@ -391,6 +436,15 @@ class YelpKafkaConsumer:
             },
             upsert=True
         )
+        
+        # Broadcast the event
+        self._broadcast_event('mongodb', 'review', {
+            'review_id': review['review_id'],
+            'business_id': review['business_id'],
+            'user_id': review['user_id'],
+            'stars': review.get('stars', 0),
+            'date': review.get('date').isoformat() if isinstance(review.get('date'), datetime) else review.get('date')
+        })
     
     def _process_checkin_mongodb(self, checkin):
         """Process a checkin message for MongoDB."""
@@ -418,6 +472,12 @@ class YelpKafkaConsumer:
             {'$inc': {'checkin_count': checkin.get('count', 1)}},
             upsert=True
         )
+        
+        # Broadcast the event
+        self._broadcast_event('mongodb', 'checkin', {
+            'business_id': checkin['business_id'],
+            'count': checkin.get('count', 1)
+        })
     
     def _process_review_neo4j(self, session, review):
         """Process a review message for Neo4j."""
@@ -457,6 +517,15 @@ class YelpKafkaConsumer:
             'text': review.get('text', ''),
             'date': review.get('date')
         })
+        
+        # Broadcast the event
+        self._broadcast_event('neo4j', 'review', {
+            'review_id': review['review_id'],
+            'business_id': review['business_id'],
+            'user_id': review['user_id'],
+            'stars': review.get('stars', 0),
+            'date': review.get('date')
+        })
     
     def _process_checkin_neo4j(self, session, checkin):
         """Process a checkin message for Neo4j."""
@@ -474,6 +543,13 @@ class YelpKafkaConsumer:
         """
         
         session.run(query, {
+            'business_id': checkin['business_id'],
+            'date': checkin.get('date'),
+            'count': checkin.get('count', 1)
+        })
+        
+        # Broadcast the event
+        self._broadcast_event('neo4j', 'checkin', {
             'business_id': checkin['business_id'],
             'date': checkin.get('date'),
             'count': checkin.get('count', 1)

@@ -142,6 +142,7 @@ async function loadMongoDBBusinesses() {
 async function showMongoDBBusinessDetails(businessId, businessName) {
     document.getElementById('mongodbBusinessDetails').classList.remove('d-none');
     document.getElementById('mongodbBusinessDetailsName').textContent = businessName;
+    document.getElementById('mongodbBusinessDetails').setAttribute('data-business-id', businessId);
     
     try {
         const response = await fetch(`/api/mongodb/business_performance?business_id=${encodeURIComponent(businessId)}`);

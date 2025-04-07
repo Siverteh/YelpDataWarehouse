@@ -1,42 +1,33 @@
 #!/bin/bash
 
-# Kafka Streaming Starter Script for headless environments
-# This script starts both the producer and consumer for Kafka streaming
+# Kafka Streaming Starter Script for Yelp Data Warehouse
+# This script creates Kafka topics and starts the consumer
 
 # Create Kafka topics if they don't exist
 echo "Creating Kafka topics..."
-sudo docker exec -it yelp-kafka kafka-topics --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic yelp-reviews
-sudo docker exec -it yelp-kafka kafka-topics --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic yelp-checkins
+sudo docker exec yelp-kafka kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic yelp-reviews
+sudo docker exec yelp-kafka kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic yelp-checkins
 
 # List topics to confirm creation
 echo "Listing Kafka topics..."
-sudo docker exec -it yelp-kafka kafka-topics --list --bootstrap-server localhost:9092
+sudo docker exec yelp-kafka kafka-topics --list --bootstrap-server kafka:9092
 
-# Start producer and consumer in background
-echo "Starting Kafka producer and consumer in background..."
+# Start consumer in the background
+echo "Starting Kafka consumer..."
+sudo docker-compose up -d kafka_consumer
 
-# Start the producer in background with output to producer.log
-echo "Starting producer (output in producer.log)..."
-cd $(dirname $0) # Change to script directory
-nohup python3 kafka/producer.py 2 1000 > ../../producer.log 2>&1 &
-PRODUCER_PID=$!
-echo "Producer started with PID: $PRODUCER_PID"
+# Check if consumer is running
+if sudo docker ps | grep -q "yelp-kafka-consumer"; then
+    echo "Kafka consumer started successfully."
+    echo "To view logs: sudo docker logs -f yelp-kafka-consumer"
+else
+    echo "Error: Failed to start Kafka consumer."
+    echo "Check logs with: sudo docker-compose logs kafka_consumer"
+fi
 
-# Wait a moment to ensure producer is running
-sleep 2
-
-# Start the consumer in background with output to consumer.log
-echo "Starting consumer (output in consumer.log)..."
-nohup python3 kafka/consumer.py > ../../consumer.log 2>&1 &
-CONSUMER_PID=$!
-echo "Consumer started with PID: $CONSUMER_PID"
-
-echo "Kafka streaming services started in the background."
-echo "To view producer logs: tail -f producer.log"
-echo "To view consumer logs: tail -f consumer.log"
-echo "To stop the services, run: kill $PRODUCER_PID $CONSUMER_PID"
-echo "Or find and kill the processes with: ps aux | grep 'kafka'"
-
-# Write the PIDs to a file for easy reference
-echo "$PRODUCER_PID $CONSUMER_PID" > ../../kafka_pids.txt
-echo "Process IDs saved to kafka_pids.txt"
+echo
+echo "Kafka infrastructure is now ready."
+echo "To start streaming real data, run: ./start_streaming.sh"
+echo "Examples:"
+echo "  ./start_streaming.sh --count=500 --interval=0.5"
+echo "  ./start_streaming.sh --infinite --mode=mixed"

@@ -143,6 +143,7 @@ async function loadNeo4jBusinesses() {
 async function showNeo4jBusinessDetails(businessId, businessName) {
     document.getElementById('neo4jBusinessDetails').classList.remove('d-none');
     document.getElementById('neo4jBusinessDetailsName').textContent = businessName;
+    document.getElementById('neo4jBusinessDetails').setAttribute('data-business-id', businessId);
     
     try {
         const response = await fetch(`/api/neo4j/business_performance?business_id=${encodeURIComponent(businessId)}`);
