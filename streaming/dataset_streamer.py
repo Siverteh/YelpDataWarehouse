@@ -1,32 +1,27 @@
 #!/usr/bin/env python3
 """
 Dataset Kafka Streamer for Yelp Data Warehouse
-
 This script reads from the Yelp dataset files and streams records not already loaded
 into the database to Kafka topics, allowing for real-time data updates.
 """
 
 import os
-import sys
 import json
 import time
 import random
-import argparse
 import pymysql
 import pymongo
-import requests
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
 from datetime import datetime
 
-
 class YelpDatasetStreamer:
     """
-    Streams data from Yelp dataset files to Kafka topics, skipping records
+    Streams real data from Yelp dataset files to Kafka topics, skipping records
     that have already been loaded into the databases during initialization.
     """
     
-    def __init__(self, bootstrap_servers='localhost:9092'):
+    def __init__(self, bootstrap_servers='kafka:9092'):
         """Initialize Kafka producer and database connections for filtering."""
         # Use environment variable if available
         actual_bootstrap_servers = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', bootstrap_servers)
@@ -52,7 +47,7 @@ class YelpDatasetStreamer:
                 else:
                     print("Failed to connect to Kafka after multiple attempts")
                     raise
-            
+        
         # Initialize database connections for checking existing records
         self._init_mysql()
         self._init_mongodb()
@@ -69,10 +64,10 @@ class YelpDatasetStreamer:
         
         # Get existing IDs to avoid duplicates
         self.loaded_business_ids = self._get_loaded_business_ids()
-        self.loaded_review_ids = self._get_loaded_review_ids(limit=50000)  # Limit to avoid memory issues
+        self.loaded_review_ids = self._get_loaded_review_ids(limit=5000)  # Limit to avoid memory issues
         
         print(f"Found {len(self.loaded_business_ids)} existing businesses")
-        print(f"Found {len(self.loaded_review_ids)} existing reviews")
+        print(f"Found {len(self.loaded_review_ids)} existing reviews in sample")
     
     def _init_mysql(self):
         """Initialize MySQL connection."""
@@ -137,8 +132,8 @@ class YelpDatasetStreamer:
         
         return loaded_ids
     
-    def _get_loaded_review_ids(self, limit=50000):
-        """Get review IDs that have already been loaded into the database."""
+    def _get_loaded_review_ids(self, limit=5000):
+        """Get a sample of review IDs that have already been loaded into the database."""
         loaded_ids = set()
         
         # Get IDs from MySQL
@@ -149,7 +144,7 @@ class YelpDatasetStreamer:
                 cursor.execute("SELECT COUNT(*) as count FROM fact_review")
                 count = cursor.fetchone()['count']
                 
-                # If we have many reviews, just load a sample to avoid memory issues
+                # If we have many reviews, just load a sample
                 if count > limit:
                     cursor.execute(f"SELECT review_id FROM fact_review LIMIT {limit}")
                     print(f"Sampling {limit} review IDs from {count} total reviews in MySQL")
@@ -163,9 +158,6 @@ class YelpDatasetStreamer:
                     loaded_ids.add(row['review_id'])
             except Exception as e:
                 print(f"Error querying MySQL for review IDs: {e}")
-        
-        # We won't load MongoDB review IDs to avoid memory issues
-        # The streaming logic will check for duplicates in both databases
         
         return loaded_ids
     
@@ -202,179 +194,6 @@ class YelpDatasetStreamer:
         
         return False
     
-    def stream_reviews(self, count=None, interval_range=(0.1, 1.0)):
-        """
-        Stream reviews from the dataset file to the Kafka topic.
-        
-        Args:
-            count: Number of reviews to stream (None for unlimited)
-            interval_range: Tuple of (min, max) seconds between messages
-        """
-        if not os.path.exists(self.review_file):
-            print(f"Review file not found: {self.review_file}")
-            return
-        
-        print(f"Starting to stream reviews from: {self.review_file}")
-        
-        sent_count = 0
-        skipped_count = 0
-        
-        with open(self.review_file, 'r', encoding='utf-8') as f:
-            for i, line in enumerate(f):
-                if not line.strip():
-                    continue
-                
-                review = json.loads(line)
-                
-                # Skip if this review is already loaded (check memory cache first, then DB)
-                if review['review_id'] in self.loaded_review_ids or self._check_review_exists(review['review_id']):
-                    skipped_count += 1
-                    if skipped_count % 1000 == 0:
-                        print(f"Skipped {skipped_count} reviews so far...")
-                    continue
-                
-                # Skip if the business is not in our loaded set
-                if review['business_id'] not in self.loaded_business_ids:
-                    skipped_count += 1
-                    continue
-                
-                # Add a source field to identify this as streaming data
-                review['source'] = 'streaming'
-                
-                # Send to Kafka
-                try:
-                    self.producer.send('yelp-reviews', key=review['business_id'], value=review)
-                    sent_count += 1
-                    
-                    # Print progress
-                    if sent_count % 10 == 0:
-                        print(f"Sent {sent_count} reviews, skipped {skipped_count}")
-                    
-                    # Flush for every message to ensure delivery
-                    self.producer.flush()
-                    
-                    # Sleep for a random interval to simulate real-time
-                    time.sleep(random.uniform(*interval_range))
-                    
-                    # Check if we've reached the desired count
-                    if count is not None and sent_count >= count:
-                        break
-                    
-                except KafkaError as e:
-                    print(f"Error sending review to Kafka: {e}")
-                except Exception as e:
-                    print(f"Unexpected error: {e}")
-        
-        print(f"Finished streaming reviews. Sent {sent_count}, skipped {skipped_count}")
-    
-    def stream_checkins(self, count=None, interval_range=(0.5, 2.0)):
-        """
-        Stream checkins from the dataset file to the Kafka topic.
-        
-        Args:
-            count: Number of checkins to stream (None for unlimited)
-            interval_range: Tuple of (min, max) seconds between messages
-        """
-        if not os.path.exists(self.checkin_file):
-            print(f"Checkin file not found: {self.checkin_file}")
-            return
-        
-        print(f"Starting to stream checkins from: {self.checkin_file}")
-        
-        sent_count = 0
-        skipped_count = 0
-        
-        with open(self.checkin_file, 'r', encoding='utf-8') as f:
-            for i, line in enumerate(f):
-                if not line.strip():
-                    continue
-                
-                checkin = json.loads(line)
-                
-                # Skip if the business is not in our loaded set
-                if checkin['business_id'] not in self.loaded_business_ids:
-                    skipped_count += 1
-                    continue
-                
-                # Add a source field to identify this as streaming data
-                checkin['source'] = 'streaming'
-                
-                # Process dates
-                if isinstance(checkin['date'], str):
-                    # Old format: we'll split the dates and send each one individually
-                    all_dates = checkin['date'].split(', ')
-                    for date_batch in [all_dates[i:i+5] for i in range(0, len(all_dates), 5)]:
-                        # Create a new checkin with a subset of dates
-                        single_checkin = {
-                            'business_id': checkin['business_id'],
-                            'date': datetime.now().isoformat(),
-                            'count': len(date_batch),
-                            'source': 'streaming'
-                        }
-                        
-                        try:
-                            self.producer.send('yelp-checkins', key=checkin['business_id'], value=single_checkin)
-                            sent_count += 1
-                            
-                            # Print progress
-                            if sent_count % 10 == 0:
-                                print(f"Sent {sent_count} checkins, skipped {skipped_count}")
-                            
-                            # Flush for every message to ensure delivery
-                            self.producer.flush()
-                            
-                            # Sleep for a random interval to simulate real-time
-                            time.sleep(random.uniform(*interval_range))
-                            
-                            # Check if we've reached the desired count
-                            if count is not None and sent_count >= count:
-                                break
-                        
-                        except KafkaError as e:
-                            print(f"Error sending checkin to Kafka: {e}")
-                        except Exception as e:
-                            print(f"Unexpected error: {e}")
-                
-                else:
-                    # New format with dictionary of dates:times
-                    for date, times in checkin['date'].items():
-                        time_count = len(times.split(', '))
-                        single_checkin = {
-                            'business_id': checkin['business_id'],
-                            'date': date,
-                            'count': time_count,
-                            'source': 'streaming'
-                        }
-                        
-                        try:
-                            self.producer.send('yelp-checkins', key=checkin['business_id'], value=single_checkin)
-                            sent_count += 1
-                            
-                            # Print progress
-                            if sent_count % 10 == 0:
-                                print(f"Sent {sent_count} checkins, skipped {skipped_count}")
-                            
-                            # Flush for every message to ensure delivery
-                            self.producer.flush()
-                            
-                            # Sleep for a random interval to simulate real-time
-                            time.sleep(random.uniform(*interval_range))
-                            
-                            # Check if we've reached the desired count
-                            if count is not None and sent_count >= count:
-                                break
-                        
-                        except KafkaError as e:
-                            print(f"Error sending checkin to Kafka: {e}")
-                        except Exception as e:
-                            print(f"Unexpected error: {e}")
-                
-                # Check if we've reached the desired count
-                if count is not None and sent_count >= count:
-                    break
-        
-        print(f"Finished streaming checkins. Sent {sent_count}, skipped {skipped_count}")
-    
     def stream_mixed(self, count=None, review_ratio=0.7, interval_range=(0.5, 2.0)):
         """
         Stream a mix of reviews and checkins, approximately maintaining the given ratio.
@@ -384,11 +203,15 @@ class YelpDatasetStreamer:
             review_ratio: Approximate ratio of reviews to total events (0.7 = 70% reviews)
             interval_range: Tuple of (min, max) seconds between messages
         """
-        # Open file handles
+        # Check if files exist
         if not os.path.exists(self.review_file) or not os.path.exists(self.checkin_file):
             print("Review or checkin file not found")
-            return
+            print(f"Review file: {self.review_file} - Exists: {os.path.exists(self.review_file)}")
+            print(f"Checkin file: {self.checkin_file} - Exists: {os.path.exists(self.checkin_file)}")
+            print("Cannot stream from dataset files")
+            return False
         
+        # Open file handles
         review_file = open(self.review_file, 'r', encoding='utf-8')
         checkin_file = open(self.checkin_file, 'r', encoding='utf-8')
         
@@ -403,7 +226,7 @@ class YelpDatasetStreamer:
             # Keep track of reviews we've already seen
             seen_reviews = set()
             
-            # Read through review file first
+            # Build review buffer
             review_buffer = []
             for line in review_file:
                 if not line.strip():
@@ -423,10 +246,10 @@ class YelpDatasetStreamer:
                 review_buffer.append(review)
                 
                 # Stop once we have a decent buffer
-                if len(review_buffer) >= 1000:
+                if len(review_buffer) >= 100:
                     break
             
-            # Read through checkin file
+            # Build checkin buffer
             checkin_buffer = []
             for line in checkin_file:
                 if not line.strip():
@@ -466,10 +289,17 @@ class YelpDatasetStreamer:
                         checkin_buffer.append(single_checkin)
                 
                 # Stop once we have a decent buffer
-                if len(checkin_buffer) >= 1000:
+                if len(checkin_buffer) >= 100:
                     break
             
             print(f"Loaded {len(review_buffer)} reviews and {len(checkin_buffer)} checkins into buffers")
+            
+            # Check if buffers are empty
+            if not review_buffer and not checkin_buffer:
+                print("No data found in buffers. Cannot stream from dataset.")
+                review_file.close()
+                checkin_file.close()
+                return False
             
             # Main streaming loop
             while True:
@@ -484,13 +314,14 @@ class YelpDatasetStreamer:
                         self.producer.flush()
                         sent_count += 1
                         review_count += 1
+                        print(f"Sent review for business {review['business_id']}")
                     except Exception as e:
                         print(f"Error sending review: {e}")
                         skipped_count += 1
                     
                     # Replenish review buffer if needed
-                    if len(review_buffer) < 100:
-                        for _ in range(min(50, 1000 - len(review_buffer))):
+                    if len(review_buffer) < 20:
+                        for _ in range(min(10, 100 - len(review_buffer))):
                             line = review_file.readline()
                             if not line.strip():
                                 continue
@@ -519,13 +350,14 @@ class YelpDatasetStreamer:
                         self.producer.flush()
                         sent_count += 1
                         checkin_count += 1
+                        print(f"Sent checkin for business {checkin['business_id']}")
                     except Exception as e:
                         print(f"Error sending checkin: {e}")
                         skipped_count += 1
                     
                     # Replenish checkin buffer if needed
-                    if len(checkin_buffer) < 100:
-                        for _ in range(min(50, 1000 - len(checkin_buffer))):
+                    if len(checkin_buffer) < 20:
+                        for _ in range(min(10, 100 - len(checkin_buffer))):
                             line = checkin_file.readline()
                             if not line.strip():
                                 continue
@@ -565,9 +397,34 @@ class YelpDatasetStreamer:
                                 print(f"Error parsing checkin: {e}")
                 
                 else:
-                    # If both buffers are empty, we're done
-                    print("Both buffers empty, ending stream")
-                    break
+                    # If both buffers are empty, stop streaming
+                    if not review_buffer and not checkin_buffer:
+                        print("Both buffers empty, ending stream")
+                        break
+                    
+                    # If just review buffer is empty, refill it
+                    if not review_buffer:
+                        print("Review buffer empty, attempting to refill...")
+                        for _ in range(50):
+                            line = review_file.readline()
+                            if not line.strip():
+                                continue
+                            
+                            try:
+                                review = json.loads(line)
+                                
+                                # Skip if already processed or business not loaded
+                                if (review['review_id'] in self.loaded_review_ids or 
+                                    review['review_id'] in seen_reviews or
+                                    self._check_review_exists(review['review_id']) or
+                                    review['business_id'] not in self.loaded_business_ids):
+                                    continue
+                                
+                                seen_reviews.add(review['review_id'])
+                                review['source'] = 'streaming'
+                                review_buffer.append(review)
+                            except Exception as e:
+                                print(f"Error parsing review: {e}")
                 
                 # Print progress periodically
                 if sent_count % 10 == 0:
@@ -587,43 +444,44 @@ class YelpDatasetStreamer:
             checkin_file.close()
             
             print(f"Finished mixed streaming. Sent {sent_count} events ({review_count} reviews, {checkin_count} checkins), skipped {skipped_count}")
+            return sent_count > 0
     
     def close(self):
         """Close connections."""
-        self.producer.close()
+        if hasattr(self, 'producer'):
+            self.producer.close()
         
-        if self.mysql_conn:
+        if hasattr(self, 'mysql_conn') and self.mysql_conn:
             self.mysql_conn.close()
         
-        if self.mongodb_client:
+        if hasattr(self, 'mongodb_client') and self.mongodb_client:
             self.mongodb_client.close()
 
 
 if __name__ == "__main__":
+    import argparse
+    
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Stream Yelp dataset to Kafka topics")
-    parser.add_argument("--mode", choices=["reviews", "checkins", "mixed"], default="mixed",
-                      help="Type of data to stream (default: mixed)")
-    parser.add_argument("--count", type=int, default=None,
-                      help="Number of events to stream (default: unlimited)")
-    parser.add_argument("--interval", type=float, default=0.5,
-                      help="Base interval between events in seconds (default: 0.5)")
-    parser.add_argument("--bootstrap-servers", default="localhost:9092",
-                      help="Kafka bootstrap servers (default: localhost:9092)")
+    parser = argparse.ArgumentParser(description="Stream real data from Yelp dataset to Kafka")
+    parser.add_argument("--count", type=int, default=100, help="Number of events to stream (default: 100)")
+    parser.add_argument("--interval-min", type=float, default=0.5, help="Minimum interval between events (default: 0.5)")
+    parser.add_argument("--interval-max", type=float, default=2.0, help="Maximum interval between events (default: 2.0)")
+    parser.add_argument("--review-ratio", type=float, default=0.7, help="Ratio of reviews to checkins (default: 0.7)")
     
     args = parser.parse_args()
     
+    bootstrap_servers = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
+    
     try:
-        # Initialize streamer
-        streamer = YelpDatasetStreamer(bootstrap_servers=args.bootstrap_servers)
+        # Initialize dataset streamer
+        streamer = YelpDatasetStreamer(bootstrap_servers=bootstrap_servers)
         
-        # Stream data based on mode
-        if args.mode == "reviews":
-            streamer.stream_reviews(count=args.count, interval_range=(args.interval, args.interval * 2))
-        elif args.mode == "checkins":
-            streamer.stream_checkins(count=args.count, interval_range=(args.interval, args.interval * 2))
-        else:  # mixed
-            streamer.stream_mixed(count=args.count, interval_range=(args.interval, args.interval * 2))
+        # Stream mixed data
+        streamer.stream_mixed(
+            count=args.count,
+            review_ratio=args.review_ratio,
+            interval_range=(args.interval_min, args.interval_max)
+        )
     
     except KeyboardInterrupt:
         print("\nStreaming interrupted by user")

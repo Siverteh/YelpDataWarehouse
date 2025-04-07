@@ -1,17 +1,25 @@
+#!/usr/bin/env python3
+"""
+Kafka Producer for Yelp Data Warehouse
+Generates simulated Yelp data events and sends them to Kafka topics.
+"""
+
+import os
 import json
 import time
 import random
+import pymysql
 from kafka import KafkaProducer
 from datetime import datetime
-import sys
 
 class YelpKafkaProducer:
     """
-    Producer that simulates real-time Yelp data events and streams them to Kafka topics.
+    Producer that generates simulated Yelp data events and sends them to Kafka topics.
     """
     
-    def __init__(self, bootstrap_servers='localhost:9092'):
+    def __init__(self, bootstrap_servers='kafka:9092'):
         """Initialize the Kafka producer with server address."""
+        print(f"Initializing Kafka producer with bootstrap servers: {bootstrap_servers}")
         self.producer = KafkaProducer(
             bootstrap_servers=bootstrap_servers,
             value_serializer=lambda v: json.dumps(v).encode('utf-8'),
@@ -25,36 +33,94 @@ class YelpKafkaProducer:
         print(f"Loaded {len(self.business_ids)} businesses and {len(self.user_ids)} users")
     
     def _load_business_ids(self):
-        """Load a list of business IDs from the business dataset."""
-        business_ids = []
+        """Load a list of business IDs from the database or sample dataset."""
         try:
-            with open('/app/data/yelp_academic_dataset_business.json', 'r', encoding='utf-8') as f:
-                for i, line in enumerate(f):
-                    if i >= 1000:  # Limit to 1000 businesses for demo
-                        break
-                    data = json.loads(line)
-                    business_ids.append(data['business_id'])
+            # Try connecting to MySQL to get business IDs
+            conn = pymysql.connect(
+                host=os.environ.get('MYSQL_HOST', 'mysql'),
+                port=int(os.environ.get('MYSQL_PORT', 3306)),
+                user=os.environ.get('MYSQL_USER', 'root'),
+                password=os.environ.get('MYSQL_PASSWORD', 'user'),
+                db=os.environ.get('MYSQL_DATABASE', 'yelp_dw'),
+                charset='utf8mb4',
+                cursorclass=pymysql.cursors.DictCursor
+            )
+            
+            cursor = conn.cursor()
+            cursor.execute("SELECT business_id FROM dim_business LIMIT 100")
+            business_ids = [row['business_id'] for row in cursor.fetchall()]
+            cursor.close()
+            conn.close()
+            
+            if business_ids:
+                return business_ids
         except Exception as e:
-            print(f"Error loading business IDs: {e}")
-            business_ids = ["sample_business_id_1", "sample_business_id_2", "sample_business_id_3"]
+            print(f"Error loading business IDs from database: {e}")
         
-        return business_ids
+        # Fallback to loading from file if available
+        try:
+            data_dir = os.environ.get('DATA_DIR', '/app/data')
+            business_file = os.path.join(data_dir, 'yelp_academic_dataset_business.json')
+            
+            if os.path.exists(business_file):
+                business_ids = []
+                with open(business_file, 'r', encoding='utf-8') as f:
+                    for i, line in enumerate(f):
+                        if i >= 100:  # Limit to 100 businesses for demo
+                            break
+                        data = json.loads(line)
+                        business_ids.append(data['business_id'])
+                return business_ids
+        except Exception as e:
+            print(f"Error loading business IDs from file: {e}")
+        
+        # Fallback to sample IDs
+        return ["sample_business_id_1", "sample_business_id_2", "sample_business_id_3"]
     
     def _load_user_ids(self):
-        """Load a list of user IDs from the user dataset."""
-        user_ids = []
+        """Load a list of user IDs from the database or sample dataset."""
         try:
-            with open('/app/data/yelp_academic_dataset_user.json', 'r', encoding='utf-8') as f:
-                for i, line in enumerate(f):
-                    if i >= 1000:  # Limit to 1000 users for demo
-                        break
-                    data = json.loads(line)
-                    user_ids.append(data['user_id'])
+            # Try connecting to MySQL to get user IDs
+            conn = pymysql.connect(
+                host=os.environ.get('MYSQL_HOST', 'mysql'),
+                port=int(os.environ.get('MYSQL_PORT', 3306)),
+                user=os.environ.get('MYSQL_USER', 'root'),
+                password=os.environ.get('MYSQL_PASSWORD', 'user'),
+                db=os.environ.get('MYSQL_DATABASE', 'yelp_dw'),
+                charset='utf8mb4',
+                cursorclass=pymysql.cursors.DictCursor
+            )
+            
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM dim_user LIMIT 100")
+            user_ids = [row['user_id'] for row in cursor.fetchall()]
+            cursor.close()
+            conn.close()
+            
+            if user_ids:
+                return user_ids
         except Exception as e:
-            print(f"Error loading user IDs: {e}")
-            user_ids = ["sample_user_id_1", "sample_user_id_2", "sample_user_id_3"]
+            print(f"Error loading user IDs from database: {e}")
         
-        return user_ids
+        # Fallback to loading from file if available
+        try:
+            data_dir = os.environ.get('DATA_DIR', '/app/data')
+            user_file = os.path.join(data_dir, 'yelp_academic_dataset_user.json')
+            
+            if os.path.exists(user_file):
+                user_ids = []
+                with open(user_file, 'r', encoding='utf-8') as f:
+                    for i, line in enumerate(f):
+                        if i >= 100:  # Limit to 100 users for demo
+                            break
+                        data = json.loads(line)
+                        user_ids.append(data['user_id'])
+                return user_ids
+        except Exception as e:
+            print(f"Error loading user IDs from file: {e}")
+        
+        # Fallback to sample IDs
+        return ["sample_user_id_1", "sample_user_id_2", "sample_user_id_3"]
     
     def generate_review(self):
         """Generate a simulated review."""
@@ -139,7 +205,7 @@ class YelpKafkaProducer:
         
         return " ".join(selected_phrases)
     
-    def stream_events(self, interval=2, count=None):
+    def stream_events(self, interval=1.0, count=None):
         """
         Stream events to Kafka topics.
         
@@ -149,6 +215,8 @@ class YelpKafkaProducer:
         """
         i = 0
         try:
+            print(f"Starting to stream events with interval {interval}s. Press Ctrl+C to stop.")
+            
             while count is None or i < count:
                 # Generate a review (70% probability)
                 if random.random() < 0.7:
@@ -167,32 +235,29 @@ class YelpKafkaProducer:
                 
                 # Sleep for the specified interval
                 time.sleep(interval)
+                
+                # Print progress every 10 events
+                if i % 10 == 0:
+                    print(f"Sent {i} events so far...")
         
         except KeyboardInterrupt:
-            print("Streaming stopped by user")
+            print("\nStreaming stopped by user")
         finally:
             self.producer.close()
             print(f"Producer closed. Streamed {i} events.")
 
+
 if __name__ == "__main__":
-    # Set default values
-    interval = 2  # seconds
-    count = 100   # events
+    import argparse
     
-    # Parse command-line arguments
-    if len(sys.argv) > 1:
-        try:
-            interval = float(sys.argv[1])
-        except ValueError:
-            print("Invalid interval value. Using default 2 seconds.")
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Kafka producer for Yelp Data Warehouse")
+    parser.add_argument("--interval", type=float, default=1.0, help="Interval between events in seconds (default: 1.0)")
+    parser.add_argument("--count", type=int, default=100, help="Number of events to produce (default: 100)")
     
-    if len(sys.argv) > 2:
-        try:
-            count = int(sys.argv[2])
-        except ValueError:
-            print("Invalid count value. Using default 100 events.")
+    args = parser.parse_args()
     
     # Initialize and run producer
-    producer = YelpKafkaProducer()
-    print(f"Starting to stream events every {interval} seconds. Press Ctrl+C to stop.")
-    producer.stream_events(interval=interval, count=count)
+    bootstrap_servers = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
+    producer = YelpKafkaProducer(bootstrap_servers=bootstrap_servers)
+    producer.stream_events(interval=args.interval, count=args.count)
