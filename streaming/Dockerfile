@@ -9,4 +9,4 @@ RUN pip install --no-cache-dir kafka-python pymysql pymongo neo4j requests
 COPY *.py ./
 
 # Default command (can be overridden from docker-compose or command line)
-CMD ["python", "-u", "streaming.py", "consumer"]
+CMD ["tail", "-f", "/dev/null"]

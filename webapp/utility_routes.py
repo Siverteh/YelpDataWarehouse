@@ -1,7 +1,7 @@
 """
 Utility routes for the Yelp Data Warehouse API
 """
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from datetime import datetime
 from db_utils import (
     get_mysql_connection, 
@@ -10,7 +10,6 @@ from db_utils import (
     logger
 )
 import os
-
 # Create Blueprint for utility routes
 utility_bp = Blueprint('utility', __name__, url_prefix='/api')
 

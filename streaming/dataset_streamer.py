@@ -121,7 +121,7 @@ class YelpDatasetStreamer:
                 print(f"Error querying MySQL for business IDs: {e}")
         
         # Get IDs from MongoDB as a backup or supplement
-        if self.mongodb_db:
+        if self.mongodb_db is not None:
             try:
                 count_before = len(loaded_ids)
                 mongo_ids = {doc['business_id'] for doc in self.mongodb_db.businesses.find({}, {'business_id': 1})}
@@ -174,7 +174,7 @@ class YelpDatasetStreamer:
                 cursor.execute("SELECT 1 FROM fact_review WHERE review_id = %s LIMIT 1", (review_id,))
                 result = cursor.fetchone()
                 cursor.close()
-                if result:
+                if result is not None:
                     # Add to in-memory cache for future checks
                     self.loaded_review_ids.add(review_id)
                     return True
@@ -182,10 +182,10 @@ class YelpDatasetStreamer:
                 print(f"Error checking review existence in MySQL: {e}")
         
         # Check MongoDB
-        if self.mongodb_db:
+        if self.mongodb_db is not None:
             try:
                 result = self.mongodb_db.reviews.find_one({'review_id': review_id}, {'_id': 1})
-                if result:
+                if result is not None:
                     # Add to in-memory cache for future checks
                     self.loaded_review_ids.add(review_id)
                     return True
