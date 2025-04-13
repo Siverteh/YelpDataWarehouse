@@ -131,22 +131,29 @@ async function searchMySQLBusinesses(page = 1) {
         const businesses = Array.isArray(data) ? data : data.businesses || [];
         const pagination = data.pagination || { total: businesses.length, page: 1, limit: limit, pages: 1 };
         
+        // Display total count at top of results
+        const totalResultsDiv = document.createElement('div');
+        totalResultsDiv.className = 'mb-3';
+        totalResultsDiv.innerHTML = `<strong>Found ${formatNumber(pagination.total)} businesses matching your criteria.</strong>`;
+        document.getElementById('mysqlSearchResults').appendChild(totalResultsDiv);
+        
         // Create table
         if (businesses.length === 0) {
             document.getElementById('mysqlSearchResults').innerHTML = '<div class="alert alert-info">No businesses found matching your criteria.</div>';
         } else {
             let tableHtml = `
-                <table class="table table-hover business-table">
-                    <thead>
-                        <tr>
-                            <th>Business Name</th>
-                            <th>City</th>
-                            <th>State</th>
-                            <th>Stars</th>
-                            <th>Reviews</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <div class="table-responsive">
+                    <table class="table table-hover business-table">
+                        <thead>
+                            <tr>
+                                <th>Business Name</th>
+                                <th>City</th>
+                                <th>State</th>
+                                <th>Stars</th>
+                                <th>Reviews</th>
+                            </tr>
+                        </thead>
+                        <tbody>
             `;
             
             businesses.forEach(business => {
@@ -155,7 +162,7 @@ async function searchMySQLBusinesses(page = 1) {
                         <td>${business.business_name || business.name}</td>
                         <td>${business.city || 'N/A'}</td>
                         <td>${business.state || 'N/A'}</td>
-                        <td>${business.stars || 'N/A'}</td>
+                        <td>${formatStarRating(business.stars)}</td>
                         <td>${business.review_count || 'N/A'}</td>
                     </tr>
                 `;
@@ -164,6 +171,7 @@ async function searchMySQLBusinesses(page = 1) {
             tableHtml += `
                     </tbody>
                 </table>
+            </div>
             `;
             
             document.getElementById('mysqlSearchResults').innerHTML = tableHtml;
@@ -217,6 +225,50 @@ async function searchMySQLBusinesses(page = 1) {
     }
 }
 
+// Format star rating display for tables
+function formatStarRating(stars) {
+    if (stars === undefined || stars === null) return 'N/A';
+    
+    // Convert to number if it's a string
+    stars = parseFloat(stars);
+    
+    const fullStars = Math.floor(stars);
+    const halfStar = stars % 1 >= 0.5;
+    let html = '';
+    
+    // Add full stars
+    for (let i = 0; i < fullStars; i++) {
+        html += '<i class="bi bi-star-fill text-warning"></i>';
+    }
+    
+    // Add half star if needed
+    if (halfStar) {
+        html += '<i class="bi bi-star-half text-warning"></i>';
+    }
+    
+    // Add empty stars
+    const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+    for (let i = 0; i < emptyStars; i++) {
+        html += '<i class="bi bi-star text-warning"></i>';
+    }
+    
+    return html;
+}
+
+// Clear search form
+function clearMySQLSearch() {
+    document.getElementById('mysqlSearchQuery').value = '';
+    document.getElementById('mysqlLocationFilter').value = '';
+    document.getElementById('mysqlCategoryFilter').value = '';
+    document.getElementById('mysqlRatingFilter').value = '';
+    document.getElementById('mysqlReviewCountFilter').value = '';
+    document.getElementById('mysqlSortBy').value = 'stars';
+    
+    // Clear results
+    document.getElementById('mysqlSearchResults').innerHTML = '';
+    document.getElementById('mysqlSearchPagination').classList.add('d-none');
+}
+
 // Load MySQL Top Businesses
 async function loadMySQLBusinesses() {
     const category = document.getElementById('mysqlCategorySelect').value;
@@ -254,7 +306,7 @@ async function loadMySQLBusinesses() {
                     <td>${business.business_name || business.name}</td>
                     <td>${business.city || 'N/A'}</td>
                     <td>${business.state || 'N/A'}</td>
-                    <td>${business.stars || 'N/A'}</td>
+                    <td>${formatStarRating(business.stars)}</td>
                     <td>${business.review_count || 'N/A'}</td>
                 </tr>
             `;
@@ -493,7 +545,7 @@ async function showMySQLBusinessDetails(businessId, businessName) {
         // Update business details
         const business = data.business;
         document.getElementById('mysqlBusinessDetailsLocation').textContent = `${business.city}, ${business.state}`;
-        document.getElementById('mysqlBusinessDetailsRating').textContent = `${business.stars} stars (${business.avg_rating ? business.avg_rating.toFixed(1) : 'N/A'} avg)`;
+        document.getElementById('mysqlBusinessDetailsRating').innerHTML = `${formatStarRating(business.stars)} (${business.avg_rating ? business.avg_rating.toFixed(1) : 'N/A'} avg)`;
         document.getElementById('mysqlBusinessDetailsReviews').textContent = business.review_count || business.total_reviews || 'N/A';
         
         // Fix checkins display - use N/A only if truly not available
@@ -1139,6 +1191,7 @@ function formatCellValue(value) {
 function initializeMySQLEventListeners() {
     // Business search listeners
     document.getElementById('mysqlSearchButton')?.addEventListener('click', () => searchMySQLBusinesses(1));
+    document.getElementById('mysqlClearButton')?.addEventListener('click', clearMySQLSearch);
     
     // Business list tab
     document.getElementById('loadMySQLBusinesses')?.addEventListener('click', loadMySQLBusinesses);

@@ -519,6 +519,7 @@ def mysql_business_reviews():
     business_id = request.args.get('business_id')
     page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 10))
+    sort = request.args.get('sort', 'date_desc')
     offset = (page - 1) * limit
     
     if not business_id:
@@ -564,17 +565,33 @@ def mysql_business_reviews():
     try:
         cursor = conn.cursor()
         
+        # Determine sort order
+        sort_column = "t.date_actual"
+        sort_direction = "DESC"
+        
+        if sort == 'date_asc':
+            sort_direction = "ASC"
+        elif sort == 'stars_desc':
+            sort_column = "r.stars"
+            sort_direction = "DESC"
+        elif sort == 'stars_asc':
+            sort_column = "r.stars"
+            sort_direction = "ASC"
+        elif sort == 'useful_desc':
+            sort_column = "r.useful_votes"
+            sort_direction = "DESC"
+        
         # Get reviews with user details
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT r.review_id, r.stars, r.useful_votes, r.funny_votes, 
                    r.cool_votes, t.date_actual as review_date,
                    u.name as user_name, u.user_id,
-                   'Review text not available in database' as text
+                   r.text
             FROM fact_review r
             JOIN dim_time t ON r.time_id = t.time_id
             JOIN dim_user u ON r.user_id = u.user_id
             WHERE r.business_id = %s
-            ORDER BY t.date_actual DESC
+            ORDER BY {sort_column} {sort_direction}
             LIMIT %s OFFSET %s
         """, (business_id, limit, offset))
         
@@ -617,9 +634,13 @@ def mysql_business_reviews():
 
 @mysql_bp.route('/search_businesses')
 def mysql_search_businesses():
-    """Search businesses by name, city, or state"""
+    """Search businesses by name, location and filters"""
     query = request.args.get('query', '')
+    location = request.args.get('location', '')
     category = request.args.get('category', '')
+    min_rating = request.args.get('min_rating', '')
+    min_reviews = request.args.get('min_reviews', '')
+    sort_by = request.args.get('sort_by', 'stars')
     page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 20))
     offset = (page - 1) * limit
@@ -671,9 +692,13 @@ def mysql_search_businesses():
         
         # Add search conditions
         if query:
-            where_clauses.append("(b.business_name LIKE %s OR l.city LIKE %s OR l.state LIKE %s)")
-            search_term = f"%{query}%"
-            params.extend([search_term, search_term, search_term])
+            where_clauses.append("(b.business_name LIKE %s)")
+            params.append(f"%{query}%")
+        
+        # Add location filter
+        if location:
+            where_clauses.append("(l.city LIKE %s OR l.state LIKE %s)")
+            params.extend([f"%{location}%", f"%{location}%"])
         
         # Add category filter if specified
         if category:
@@ -682,19 +707,37 @@ def mysql_search_businesses():
             where_clauses.append("c.category_name = %s")
             params.append(category)
         
+        # Add minimum rating filter
+        if min_rating:
+            where_clauses.append("b.stars >= %s")
+            params.append(float(min_rating))
+        
+        # Add minimum reviews filter
+        if min_reviews:
+            where_clauses.append("b.review_count >= %s")
+            params.append(int(min_reviews))
+        
         # Combine where clauses if any
         if where_clauses:
             sql += " WHERE " + " AND ".join(where_clauses)
         
-        # Add order by and limit
-        sql += " ORDER BY b.stars DESC, b.review_count DESC LIMIT %s OFFSET %s"
+        # Order by
+        if sort_by == 'stars':
+            sql += " ORDER BY b.stars DESC, b.review_count DESC"
+        elif sort_by == 'review_count':
+            sql += " ORDER BY b.review_count DESC, b.stars DESC"
+        else:  # name
+            sql += " ORDER BY b.business_name ASC"
+        
+        # Add limit and offset
+        sql += " LIMIT %s OFFSET %s"
         params.extend([limit, offset])
         
         # Execute query
         cursor.execute(sql, params)
         businesses = cursor.fetchall()
         
-        # Get total count for pagination
+        # Get total count for pagination (without limit/offset)
         count_sql = """
             SELECT COUNT(*) as count
             FROM dim_business b
@@ -771,11 +814,8 @@ def mysql_review_trends():
         cursor.close()
         conn.close()
         
-        dates = [row['month_date'] for row in results]
+        dates = [row['month_date'].strftime('%Y-%m-%d') for row in results]
         review_counts = [row['review_count'] for row in results]
-        
-        # Convert dates for JSON serialization
-        dates = [date.strftime('%Y-%m-%d') if isinstance(date, datetime) else date for date in dates]
         
         return jsonify({
             "dates": dates,
