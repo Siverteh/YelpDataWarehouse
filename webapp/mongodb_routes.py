@@ -36,7 +36,12 @@ def mongodb_overview_stats():
             {"$limit": 10},
             {"$project": {"category": "$_id", "count": 1, "_id": 0}}
         ]
-        category_stats = list(db.businesses.aggregate(pipeline))
+        
+        try:
+            category_stats = list(db.businesses.aggregate(pipeline))
+        except Exception as e:
+            logger.warning(f"Error getting category stats: {str(e)}")
+            category_stats = []
         
         # Get star distribution using aggregation
         pipeline = [
@@ -44,7 +49,12 @@ def mongodb_overview_stats():
             {"$sort": {"_id": 1}},
             {"$project": {"stars": "$_id", "count": 1, "_id": 0}}
         ]
-        star_distribution = list(db.reviews.aggregate(pipeline))
+        
+        try:
+            star_distribution = list(db.reviews.aggregate(pipeline))
+        except Exception as e:
+            logger.warning(f"Error getting star distribution: {str(e)}")
+            star_distribution = []
         
         client.close()
         
@@ -61,20 +71,30 @@ def mongodb_overview_stats():
         if client:
             client.close()
         logger.error(f"Error in mongodb_overview_stats: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "business_count": 0,
+            "review_count": 0,
+            "user_count": 0,
+            "category_stats": [],
+            "star_distribution": []
+        })
 
 @mongodb_bp.route('/top_businesses')
 def mongodb_top_businesses():
     """Get top businesses filtered by category"""
     # Get query parameters
-    category = request.args.get('category', 'Restaurants')
+    category = request.args.get('category', '')
+    page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 10))
-    query = request.args.get('query')
-    location = request.args.get('location')
-    min_rating = request.args.get('min_rating')
-    attribute_key = request.args.get('attribute_key')
-    attribute_value = request.args.get('attribute_value')
+    query = request.args.get('query', '')
+    location = request.args.get('location', '')
+    min_rating = request.args.get('min_rating', '')
+    attribute_key = request.args.get('attribute_key', '')
+    attribute_value = request.args.get('attribute_value', '')
     sort_by = request.args.get('sort_by', 'stars')
+    
+    # Calculate offset based on page and limit
+    offset = (page - 1) * limit
     
     client = get_mongodb_connection()
     if not client:
@@ -99,6 +119,8 @@ def mongodb_top_businesses():
         if location:
             location_regex = {"$regex": location, "$options": "i"}
             match_criteria["$or"] = [
+                {"city": location_regex},
+                {"state": location_regex},
                 {"location.city": location_regex},
                 {"location.state": location_regex}
             ]
@@ -125,6 +147,12 @@ def mongodb_top_businesses():
         else:  # name
             sort_options = {"name": 1}
         
+        # Get total count for pagination
+        total_count = db.businesses.count_documents(match_criteria)
+        
+        # Calculate total pages
+        total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
+        
         # Build the pipeline to properly handle location properties
         pipeline = [
             {"$match": match_criteria},
@@ -134,22 +162,51 @@ def mongodb_top_businesses():
                 "name": 1,
                 "stars": 1,
                 "review_count": 1,
+                "city": 1,
+                "state": 1,
                 "location": 1,
                 "attributes": 1
             }},
             {"$sort": sort_options},
+            {"$skip": offset},
             {"$limit": limit}
         ]
         
-        results = list(db.businesses.aggregate(pipeline))
+        businesses = list(db.businesses.aggregate(pipeline))
+        
+        # Extract location data into top-level city and state fields if they exist in a nested location object
+        for business in businesses:
+            if 'location' in business and isinstance(business['location'], dict):
+                if 'city' not in business and 'city' in business['location']:
+                    business['city'] = business['location']['city']
+                if 'state' not in business and 'state' in business['location']:
+                    business['state'] = business['location']['state']
+        
         client.close()
         
-        return jsonify(results)
+        # Return with pagination info
+        return jsonify({
+            "businesses": businesses,
+            "pagination": {
+                "total": total_count,
+                "page": page,
+                "limit": limit,
+                "pages": total_pages
+            }
+        })
     except Exception as e:
         if client:
             client.close()
         logger.error(f"Error in mongodb_top_businesses: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "businesses": [],
+            "pagination": {
+                "total": 0,
+                "page": page,
+                "limit": limit,
+                "pages": 0
+            }
+        })
 
 @mongodb_bp.route('/business_performance')
 def mongodb_business_performance():
@@ -182,6 +239,13 @@ def mongodb_business_performance():
             if not business:
                 client.close()
                 return jsonify({"error": "Business not found"}), 404
+        
+        # Extract location data into top-level city and state fields if they exist in a nested location object
+        if 'location' in business and isinstance(business['location'], dict):
+            if 'city' not in business and 'city' in business['location']:
+                business['city'] = business['location']['city']
+            if 'state' not in business and 'state' in business['location']:
+                business['state'] = business['location']['state']
         
         # Get reviews by month
         pipeline = [
@@ -241,7 +305,11 @@ def mongodb_business_performance():
         if client:
             client.close()
         logger.error(f"Error in mongodb_business_performance: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "business": {},
+            "reviews_by_month": [],
+            "checkins_by_month": []
+        })
 
 @mongodb_bp.route('/business_reviews')
 def mongodb_business_reviews():
@@ -345,7 +413,15 @@ def mongodb_business_reviews():
         if client:
             client.close()
         logger.error(f"Error in mongodb_business_reviews: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "reviews": [],
+            "pagination": {
+                "total": 0,
+                "page": page,
+                "limit": limit,
+                "pages": 0
+            }
+        })
 
 @mongodb_bp.route('/business_checkins')
 def mongodb_business_checkins():
@@ -406,7 +482,11 @@ def mongodb_business_checkins():
         if client:
             client.close()
         logger.error(f"Error in mongodb_business_checkins: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "day_distribution": [0, 0, 0, 0, 0, 0, 0],
+            "month_distribution": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            "hour_distribution": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        })
 
 @mongodb_bp.route('/document_size_stats')
 def mongodb_document_size_stats():
@@ -459,7 +539,10 @@ def mongodb_document_size_stats():
         if client:
             client.close()
         logger.error(f"Error in mongodb_document_size_stats: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "size_ranges": ["<1KB", "1-5KB", "5-10KB", "10-50KB", "50-100KB", ">100KB"],
+            "document_counts": [0, 0, 0, 0, 0, 0]
+        })
 
 @mongodb_bp.route('/business_attributes')
 def mongodb_business_attributes():
@@ -497,7 +580,10 @@ def mongodb_business_attributes():
         if client:
             client.close()
         logger.error(f"Error in mongodb_business_attributes: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "attribute_names": [],
+            "attribute_counts": []
+        })
 
 @mongodb_bp.route('/schema_analysis')
 def mongodb_schema_analysis():
@@ -574,7 +660,7 @@ def mongodb_schema_analysis():
         if client:
             client.close()
         logger.error(f"Error in mongodb_schema_analysis: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify([])
 
 @mongodb_bp.route('/array_field_analysis')
 def mongodb_array_field_analysis():
@@ -635,7 +721,13 @@ def mongodb_array_field_analysis():
         if client:
             client.close()
         logger.error(f"Error in mongodb_array_field_analysis: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "array_fields": [
+                {"field": "categories", "avg_length": 0, "max_length": 0},
+                {"field": "friends", "avg_length": 0, "max_length": 0},
+                {"field": "photos", "avg_length": 0, "max_length": 0}
+            ]
+        })
 
 @mongodb_bp.route('/document_structure')
 def mongodb_document_structure():
@@ -652,7 +744,10 @@ def mongodb_document_structure():
         
         # If no real document exists, return an empty structure
         if not sample_business:
-            return jsonify({"error": "No business documents found"}), 404
+            return jsonify({
+                "type": "Object", 
+                "fields": {}
+            })
             
         # Analyze and describe the structure
         structure = {}

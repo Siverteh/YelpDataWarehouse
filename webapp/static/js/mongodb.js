@@ -133,7 +133,7 @@ async function searchMongoDBBusinesses(page = 1) {
     const attributeKey = document.getElementById('mongodbAttributeKey').value;
     const attributeValue = document.getElementById('mongodbAttributeValue').value;
     const sortBy = document.getElementById('mongodbSortBy').value;
-    const limit = parseInt(document.getElementById('mongodbLimitSelect').value) || 10;
+    const limit = 10; // Fixed limit of 10 items per page
     
     // Show loader
     document.getElementById('mongodbSearchLoader').classList.remove('d-none');
@@ -141,8 +141,6 @@ async function searchMongoDBBusinesses(page = 1) {
     document.getElementById('mongodbSearchPagination').classList.add('d-none');
     
     try {
-        // In a real app, we would build MongoDB-specific query params
-        // For demo purposes, we'll use a simplified approach
         const params = new URLSearchParams();
         if (searchQuery) params.append('query', searchQuery);
         if (location) params.append('location', location);
@@ -157,11 +155,29 @@ async function searchMongoDBBusinesses(page = 1) {
         params.append('limit', limit);
         
         const response = await fetch(`/api/mongodb/top_businesses?${params.toString()}`);
-        const businesses = await response.json();
+        const data = await response.json();
         
-        // For demo purposes since we don't have pagination in the backend yet
-        const totalResults = businesses.length;
-        const totalPages = Math.ceil(totalResults / limit);
+        // Handle both array and object with pagination formats
+        let businesses = [];
+        let pagination = { total: 0, page: page, limit: limit, pages: 1 };
+        
+        if (Array.isArray(data)) {
+            businesses = data;
+            pagination.total = data.length;
+        } else if (data.businesses) {
+            businesses = data.businesses;
+            pagination = data.pagination || pagination;
+        } else if (data.reviews) {
+            // This is an unexpected format but we'll handle it anyway
+            businesses = [];
+            pagination = data.pagination || pagination;
+        } else {
+            businesses = data;
+            pagination.total = businesses.length;
+        }
+        
+        // Calculate total pages
+        pagination.pages = Math.ceil(pagination.total / limit);
         
         // Create table
         if (businesses.length === 0) {
@@ -170,7 +186,7 @@ async function searchMongoDBBusinesses(page = 1) {
             // Show total count
             const totalResultsDiv = document.createElement('div');
             totalResultsDiv.className = 'mb-3';
-            totalResultsDiv.innerHTML = `<strong>Found ${businesses.length} businesses matching your criteria.</strong>`;
+            totalResultsDiv.innerHTML = `<strong>Found ${formatNumber(pagination.total)} businesses matching your criteria.</strong>`;
             document.getElementById('mongodbSearchResults').appendChild(totalResultsDiv);
             
             let tableHtml = `
@@ -189,25 +205,40 @@ async function searchMongoDBBusinesses(page = 1) {
             `;
             
             businesses.forEach(business => {
-                // Handle nested location object properly - improved to handle all possible formats
+                // Extract city and state with improved handling of location structures
                 let city = 'N/A';
                 let state = 'N/A';
                 
-                // Check all possible location formats
+                // Handle different location structures
                 if (business.location) {
                     if (typeof business.location === 'object') {
-                        city = business.location.city || city;
-                        state = business.location.state || state;
+                        city = business.location.city || business.location.address?.city || 'N/A';
+                        state = business.location.state || business.location.address?.state || 'N/A';
+                    } else if (typeof business.location === 'string') {
+                        const parts = business.location.split(',');
+                        if (parts.length >= 2) {
+                            city = parts[0].trim();
+                            state = parts[1].trim();
+                        }
                     }
                 } else {
                     // Try direct properties
-                    city = business.city || city;
-                    state = business.state || state;
+                    city = business.city || 'N/A';
+                    state = business.state || 'N/A';
                 }
                 
+                // Extract business name safely
+                const businessName = business.name || business.business_name || 'Unnamed Business';
+                
+                // Escape any special characters in the business name to avoid JS errors when clicked
+                const escapedBusinessName = businessName.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                
+                // Extract business ID safely
+                const businessId = business.business_id || business._id || '';
+                
                 tableHtml += `
-                    <tr data-business-id="${business.business_id}" onclick="showMongoDBBusinessDetails('${business.business_id}', '${business.name}')">
-                        <td>${business.name}</td>
+                    <tr data-business-id="${businessId}" onclick="showMongoDBBusinessDetails('${businessId}', '${escapedBusinessName}')">
+                        <td>${businessName}</td>
                         <td>${city}</td>
                         <td>${state}</td>
                         <td>${formatStarRating(business.stars)}</td>
@@ -225,7 +256,7 @@ async function searchMongoDBBusinesses(page = 1) {
             document.getElementById('mongodbSearchResults').innerHTML = tableHtml;
             
             // Add pagination if needed
-            if (totalPages > 1) {
+            if (pagination.pages > 1) {
                 let paginationHtml = '';
                 
                 // Previous button
@@ -237,7 +268,7 @@ async function searchMongoDBBusinesses(page = 1) {
                 
                 // Page numbers
                 const startPage = Math.max(1, page - 2);
-                const endPage = Math.min(totalPages, page + 2);
+                const endPage = Math.min(pagination.pages, page + 2);
                 
                 for (let i = startPage; i <= endPage; i++) {
                     paginationHtml += `
@@ -249,8 +280,8 @@ async function searchMongoDBBusinesses(page = 1) {
                 
                 // Next button
                 paginationHtml += `
-                    <li class="page-item ${page >= totalPages ? 'disabled' : ''}">
-                        <a class="page-link" href="#" onclick="event.preventDefault(); ${page < totalPages ? 'searchMongoDBBusinesses(' + (page + 1) + ')' : ''}">Next</a>
+                    <li class="page-item ${page >= pagination.pages ? 'disabled' : ''}">
+                        <a class="page-link" href="#" onclick="event.preventDefault(); ${page < pagination.pages ? 'searchMongoDBBusinesses(' + (page + 1) + ')' : ''}">Next</a>
                     </li>
                 `;
                 
@@ -288,214 +319,7 @@ function clearMongoDBSearch() {
     document.getElementById('mongodbSearchPagination').classList.add('d-none');
 }
 
-// Load MongoDB Top Businesses - original function, kept for backwards compatibility
-async function loadMongoDBBusinesses() {
-    const category = document.getElementById('mongodbCategorySelect').value;
-    const limit = document.getElementById('mongodbLimitSelect').value;
-    
-    // Show loader
-    document.getElementById('mongodbBusinessesLoader').classList.remove('d-none');
-    document.getElementById('mongodbBusinessesTable').innerHTML = '';
-    
-    try {
-        const response = await fetch(`/api/mongodb/top_businesses?category=${encodeURIComponent(category)}&limit=${limit}`);
-        const businesses = await response.json();
-        
-        // Create table
-        let tableHtml = `
-            <table class="table table-hover business-table">
-                <thead>
-                    <tr>
-                        <th>Business Name</th>
-                        <th>City</th>
-                        <th>State</th>
-                        <th>Stars</th>
-                        <th>Reviews</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        
-        businesses.forEach(business => {
-            // Handle nested location object correctly with improved robustness
-            let city = 'N/A';
-            let state = 'N/A';
-            
-            // Check all possible location formats
-            if (business.location) {
-                if (typeof business.location === 'object') {
-                    city = business.location.city || city;
-                    state = business.location.state || state;
-                }
-            } else {
-                // Try direct properties
-                city = business.city || city;
-                state = business.state || state;
-            }
-            
-            tableHtml += `
-                <tr data-business-id="${business.business_id}" onclick="showMongoDBBusinessDetails('${business.business_id}', '${business.name}')">
-                    <td>${business.name}</td>
-                    <td>${city}</td>
-                    <td>${state}</td>
-                    <td>${formatStarRating(business.stars)}</td>
-                    <td>${formatNumber(business.review_count)}</td>
-                </tr>
-            `;
-        });
-        
-        tableHtml += `
-                </tbody>
-            </table>
-        `;
-        
-        document.getElementById('mongodbBusinessesTable').innerHTML = tableHtml;
-    } catch (error) {
-        console.error('Error loading businesses:', error);
-        document.getElementById('mongodbBusinessesTable').innerHTML = '<div class="alert alert-danger">Error loading businesses. Please try again.</div>';
-    } finally {
-        // Hide loader
-        document.getElementById('mongodbBusinessesLoader').classList.add('d-none');
-    }
-}
-
-// Helper function to generate dummy reviews if no real reviews exist
-async function generateDummyReviewsIfNeeded(businessId, businessName, businessStars) {
-    try {
-        // Check if we have real reviews
-        const response = await fetch(`/api/mongodb/business_reviews?business_id=${encodeURIComponent(businessId)}&page=1&limit=1`);
-        const data = await response.json();
-        
-        // Check if we have any real reviews
-        if (!data.reviews || data.reviews.length === 0 || data.pagination.total === 0) {
-            console.log("No reviews found, generating dummy reviews for demonstration");
-            
-            // Generate realistic dummy reviews
-            const dummyReviews = [];
-            const reviewCount = Math.floor(5 + Math.random() * 15); // 5 to 20 reviews
-            const currentDate = new Date();
-            
-            // Common review text templates based on star ratings
-            const reviewTemplates = {
-                5: [
-                    "Absolutely loved everything about {business}! The service was impeccable, and I'll definitely be back soon.",
-                    "This place exceeded all my expectations. {business} is truly a gem in the area!",
-                    "I can't say enough good things about {business}. Top-notch quality and service all around."
-                ],
-                4: [
-                    "Really enjoyed my experience at {business}. Only a few minor things could have been better.",
-                    "Great place overall! {business} delivers consistently good service and quality.",
-                    "I had a very positive experience at {business}. Highly recommended with just a few small suggestions."
-                ],
-                3: [
-                    "My visit to {business} was okay. Some things were good, others needed improvement.",
-                    "{business} was decent but nothing special. I might return but I'm not in a hurry.",
-                    "Mixed feelings about {business}. Has potential but several areas need attention."
-                ],
-                2: [
-                    "Disappointing experience at {business}. Several issues that made our visit less than pleasant.",
-                    "I expected better from {business}. Multiple problems that weren't properly addressed.",
-                    "Not satisfied with my visit to {business}. Wouldn't recommend based on my experience."
-                ],
-                1: [
-                    "Terrible experience at {business}. Would not recommend under any circumstances.",
-                    "I regret visiting {business}. Nothing about the experience was positive.",
-                    "Extremely disappointing visit to {business}. Save yourself the trouble and go elsewhere."
-                ]
-            };
-            
-            const firstNames = ["John", "Sarah", "Michael", "Emily", "David", "Jennifer", "Robert", "Lisa", "Daniel", "Amanda"];
-            const lastNames = ["Smith", "Johnson", "Williams", "Jones", "Brown", "Davis", "Miller", "Wilson", "Moore", "Taylor"];
-            
-            for (let i = 0; i < reviewCount; i++) {
-                // Determine star rating - weighted to be near the business's actual rating
-                const baseRating = Math.round(businessStars);
-                let stars;
-                const randomValue = Math.random();
-                
-                if (randomValue < 0.6) {
-                    // 60% chance of rating near the business average
-                    stars = Math.max(1, Math.min(5, baseRating + Math.floor(Math.random() * 3) - 1));
-                } else if (randomValue < 0.8) {
-                    // 20% chance of 5-star rating
-                    stars = 5;
-                } else if (randomValue < 0.9) {
-                    // 10% chance of 1-star rating
-                    stars = 1;
-                } else {
-                    // 10% chance of random rating
-                    stars = Math.floor(Math.random() * 5) + 1;
-                }
-                
-                // Generate date within the past 2 years
-                const reviewDate = new Date(currentDate);
-                reviewDate.setDate(reviewDate.getDate() - Math.floor(Math.random() * 730)); // Up to 2 years ago
-                
-                // Create review text
-                const templates = reviewTemplates[stars];
-                let reviewText = templates[Math.floor(Math.random() * templates.length)];
-                reviewText = reviewText.replace("{business}", businessName);
-                
-                // Add some extra details for longer reviews
-                if (Math.random() > 0.5) {
-                    const extraDetails = [
-                        " The atmosphere was very welcoming.",
-                        " Staff was friendly and attentive.",
-                        " Prices were reasonable for what you get.",
-                        " The location is convenient with good parking.",
-                        " They have a great selection of options.",
-                        " The place was clean and well-maintained."
-                    ];
-                    
-                    // Add 1-3 extra details
-                    const detailsCount = Math.floor(Math.random() * 3) + 1;
-                    const selectedDetails = [];
-                    for (let j = 0; j < detailsCount; j++) {
-                        const detail = extraDetails[Math.floor(Math.random() * extraDetails.length)];
-                        if (!selectedDetails.includes(detail)) {
-                            selectedDetails.push(detail);
-                        }
-                    }
-                    
-                    reviewText += selectedDetails.join("");
-                }
-                
-                // Generate user
-                const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
-                const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
-                const userInitial = lastName.charAt(0);
-                
-                // Create review
-                dummyReviews.push({
-                    review_id: `dummy_review_${businessId}_${i}`,
-                    user_id: `user_${firstName.toLowerCase()}_${userInitial.toLowerCase()}`,
-                    user_name: `${firstName} ${userInitial}.`,
-                    stars: stars,
-                    date: reviewDate.toISOString().split('T')[0],
-                    text: reviewText,
-                    useful: Math.floor(Math.random() * 5),
-                    funny: Math.floor(Math.random() * 3),
-                    cool: Math.floor(Math.random() * 4)
-                });
-            }
-            
-            // Store dummy reviews in sessionStorage for this session
-            sessionStorage.setItem(`dummyReviews_${businessId}`, JSON.stringify({
-                reviews: dummyReviews,
-                pagination: {
-                    total: dummyReviews.length,
-                    pages: Math.ceil(dummyReviews.length / 5),
-                    page: 1,
-                    limit: 5
-                }
-            }));
-        }
-    } catch (error) {
-        console.error("Error checking/generating reviews:", error);
-    }
-}
-
-// Show MongoDB Business Details - enhanced version with tabs for reviews, checkins, and attributes
+// Show MongoDB Business Details
 async function showMongoDBBusinessDetails(businessId, businessName) {
     document.getElementById('mongodbBusinessDetails').classList.remove('d-none');
     document.getElementById('mongodbBusinessDetailsName').textContent = businessName;
@@ -515,13 +339,19 @@ async function showMongoDBBusinessDetails(businessId, businessName) {
         // Check all possible location formats
         if (business.location) {
             if (typeof business.location === 'object') {
-                city = business.location.city || city;
-                state = business.location.state || state;
+                city = business.location.city || business.location.address?.city || 'N/A';
+                state = business.location.state || business.location.address?.state || 'N/A';
+            } else if (typeof business.location === 'string') {
+                const parts = business.location.split(',');
+                if (parts.length >= 2) {
+                    city = parts[0].trim();
+                    state = parts[1].trim();
+                }
             }
         } else {
             // Try direct properties
-            city = business.city || city;
-            state = business.state || state;
+            city = business.city || 'N/A';
+            state = business.state || 'N/A';
         }
         
         document.getElementById('mongodbBusinessDetailsLocation').textContent = `${city}, ${state}`;
@@ -536,7 +366,7 @@ async function showMongoDBBusinessDetails(businessId, businessName) {
         }
         document.getElementById('mongodbBusinessDetailsReviews').textContent = formatNumber(reviewCount);
         
-        // Handle checkin counts from different possible structures - improved with dummy data fallback
+        // Handle checkin counts from different possible structures
         let checkinCount = 0;
         
         // Try all possible checkin data structures
@@ -545,26 +375,6 @@ async function showMongoDBBusinessDetails(businessId, businessName) {
         } else if (data.checkins_by_month && data.checkins_by_month.length > 0) {
             // Sum up all checkin counts from the monthly data
             checkinCount = data.checkins_by_month.reduce((sum, month) => sum + (month.checkin_count || 0), 0);
-        }
-        
-        // If no real checkin data is available, use dummy data for demonstration
-        if (checkinCount === 0) {
-            // Use business review count as a basis for generating realistic dummy data
-            const reviewCount = business.review_count || 0;
-            checkinCount = Math.max(10, Math.floor(reviewCount * 2.5 * (0.8 + Math.random() * 0.4)));
-            
-            // Also generate some dummy checkin data by month if none exists
-            if (!data.checkins_by_month || data.checkins_by_month.length === 0) {
-                data.checkins_by_month = [];
-                const currentYear = new Date().getFullYear();
-                for (let month = 1; month <= 12; month++) {
-                    data.checkins_by_month.push({
-                        year: currentYear - 1,
-                        month: month,
-                        checkin_count: Math.floor((checkinCount / 12) * (0.7 + Math.random() * 0.6))
-                    });
-                }
-            }
         }
         
         document.getElementById('mongodbBusinessDetailsCheckins').textContent = formatNumber(checkinCount);
@@ -712,10 +522,6 @@ async function showMongoDBBusinessDetails(businessId, businessName) {
             }
         });
         
-        // Generate dummy reviews if needed for demo purposes
-        // This ensures we always have reviews to show even if the database doesn't have them
-        generateDummyReviewsIfNeeded(businessId, business.name, business.stars);
-        
         // Load reviews for the reviews tab
         loadMongoDBBusinessReviews(businessId);
         
@@ -737,11 +543,7 @@ async function loadMongoDBBusinessReviews(businessId, page = 1, sort = 'date_des
     try {
         // Try to fetch reviews from our MongoDB API endpoint
         const response = await fetch(`/api/mongodb/business_reviews?business_id=${encodeURIComponent(businessId)}&page=${page}&limit=${limit}&sort=${sort}`);
-        const data = await response.json();
-        
-        // Check for dummy reviews in sessionStorage if we have no real data
-        const dummyReviewsKey = `dummyReviews_${businessId}`;
-        let useStoredDummyReviews = false;
+        let data = await response.json();
         
         // Extract reviews from different possible response formats
         let reviews = [];
@@ -753,36 +555,6 @@ async function loadMongoDBBusinessReviews(businessId, page = 1, sort = 'date_des
         } else if (data.reviews && Array.isArray(data.reviews)) {
             reviews = data.reviews;
             pagination = data.pagination || pagination;
-        }
-        
-        // If no reviews found, try to use dummy reviews from sessionStorage
-        if (reviews.length === 0) {
-            const storedDummyReviews = sessionStorage.getItem(dummyReviewsKey);
-            if (storedDummyReviews) {
-                console.log("Using stored dummy reviews");
-                const dummyData = JSON.parse(storedDummyReviews);
-                reviews = dummyData.reviews;
-                pagination = dummyData.pagination;
-                useStoredDummyReviews = true;
-                
-                // Apply sorting to dummy reviews
-                if (sort === 'date_desc') {
-                    reviews.sort((a, b) => new Date(b.date) - new Date(a.date));
-                } else if (sort === 'date_asc') {
-                    reviews.sort((a, b) => new Date(a.date) - new Date(b.date));
-                } else if (sort === 'stars_desc') {
-                    reviews.sort((a, b) => b.stars - a.stars);
-                } else if (sort === 'stars_asc') {
-                    reviews.sort((a, b) => a.stars - b.stars);
-                } else if (sort === 'useful_desc') {
-                    reviews.sort((a, b) => b.useful - a.useful);
-                }
-                
-                // Apply pagination
-                const startIndex = (page - 1) * limit;
-                const endIndex = startIndex + limit;
-                reviews = reviews.slice(startIndex, endIndex);
-            }
         }
         
         if (reviews.length === 0) {
@@ -1065,7 +837,7 @@ async function loadMongoDBAnalytics() {
             }
         });
         
-        // Load schema statistics (for demonstration)
+        // Load schema statistics
         loadSchemaStatistics();
         
         // Load document structure visualization
@@ -1076,232 +848,235 @@ async function loadMongoDBAnalytics() {
     }
 }
 
-// Load schema statistics for MongoDB (simulated)
-function loadSchemaStatistics() {
-    // In a real application, this would call a backend API to analyze schema variations
-    // For demo purposes, we'll create simulated data
-    
-    const schemaStatsCtx = document.getElementById('mongodbSchemaStatsChart').getContext('2d');
-    if (mongodbSchemaStatsChart) {
-        mongodbSchemaStatsChart.destroy();
-    }
-    
-    // Demo data showing schema variations across collections
-    const collections = ['businesses', 'reviews', 'users', 'checkins', 'tips'];
-    const fieldCounts = [15, 10, 8, 4, 6]; // Average field count
-    const variationPercentages = [25, 10, 5, 0, 8]; // Percentage of documents with schema variations
-    
-    mongodbSchemaStatsChart = new Chart(schemaStatsCtx, {
-        type: 'bar',
-        data: {
-            labels: collections,
-            datasets: [
-                {
-                    label: 'Average Field Count',
-                    data: fieldCounts,
-                    backgroundColor: 'rgba(52, 152, 219, 0.7)',
-                    yAxisID: 'y'
-                },
-                {
-                    label: 'Schema Variation (%)',
-                    data: variationPercentages,
-                    backgroundColor: 'rgba(255, 99, 132, 0.7)',
-                    yAxisID: 'y1'
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'MongoDB Collection Schema Statistics'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Average Field Count'
-                    }
-                },
-                y1: {
-                    beginAtZero: true,
-                    position: 'right',
-                    title: {
-                        display: true,
-                        text: 'Schema Variation (%)'
+// Load schema statistics for MongoDB
+async function loadSchemaStatistics() {
+    try {
+        const response = await fetch('/api/mongodb/schema_analysis');
+        const data = await response.json();
+        
+        const schemaStatsCtx = document.getElementById('mongodbSchemaStatsChart').getContext('2d');
+        if (mongodbSchemaStatsChart) {
+            mongodbSchemaStatsChart.destroy();
+        }
+        
+        // Extract data for chart
+        const collections = data.map(item => item.collection);
+        const fieldCounts = data.map(item => item.avg_field_count);
+        const variationPercentages = data.map(item => item.schema_variation);
+        
+        mongodbSchemaStatsChart = new Chart(schemaStatsCtx, {
+            type: 'bar',
+            data: {
+                labels: collections,
+                datasets: [
+                    {
+                        label: 'Average Field Count',
+                        data: fieldCounts,
+                        backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                        yAxisID: 'y'
                     },
-                    max: 100,
-                    grid: {
-                        drawOnChartArea: false
+                    {
+                        label: 'Schema Variation (%)',
+                        data: variationPercentages,
+                        backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'MongoDB Collection Schema Statistics'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Average Field Count'
+                        }
+                    },
+                    y1: {
+                        beginAtZero: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Schema Variation (%)'
+                        },
+                        max: 100,
+                        grid: {
+                            drawOnChartArea: false
+                        }
                     }
                 }
             }
+        });
+        
+        // Load array field analysis
+        const arrayResponse = await fetch('/api/mongodb/array_field_analysis');
+        const arrayData = await arrayResponse.json();
+        
+        const arrayFields = arrayData.array_fields.map(item => item.field);
+        const avgArrayLengths = arrayData.array_fields.map(item => item.avg_length);
+        
+        const arrayDistributionCtx = document.getElementById('mongodbArrayDistributionChart').getContext('2d');
+        if (mongodbArrayDistributionChart) {
+            mongodbArrayDistributionChart.destroy();
         }
-    });
-    
-    // Array field distribution chart
-    const arrayDistributionCtx = document.getElementById('mongodbArrayDistributionChart').getContext('2d');
-    if (mongodbArrayDistributionChart) {
-        mongodbArrayDistributionChart.destroy();
-    }
-    
-    // Demo data showing array field distribution
-    const arrayFields = ['categories', 'friends', 'hours', 'attributes.ambience', 'attributes.goodFor'];
-    const avgArrayLengths = [3.2, 7.5, 7, 4.2, 2.8];
-    
-    mongodbArrayDistributionChart = new Chart(arrayDistributionCtx, {
-        type: 'bar',  // Changed from horizontalBar to bar
-        data: {
-            labels: arrayFields,
-            datasets: [{
-                label: 'Average Array Length',
-                data: avgArrayLengths,
-                backgroundColor: 'rgba(46, 204, 113, 0.7)'
-            }]
-        },
-        options: {
-            indexAxis: 'y',  // This makes a horizontal bar chart in Chart.js v3
-            responsive: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Array Field Length Distribution'
+        
+        mongodbArrayDistributionChart = new Chart(arrayDistributionCtx, {
+            type: 'bar',
+            data: {
+                labels: arrayFields,
+                datasets: [{
+                    label: 'Average Array Length',
+                    data: avgArrayLengths,
+                    backgroundColor: 'rgba(46, 204, 113, 0.7)'
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Array Field Length Distribution'
+                    }
                 }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error('Error loading schema statistics:', error);
+    }
 }
 
-// Visualize document structure (simulated)
-function visualizeDocumentStructure() {
-    // In a real app, this would use data from the backend
-    // For demo purposes, we'll create a static visualization
-    
+// Visualize document structure
+async function visualizeDocumentStructure() {
     const container = document.getElementById('documentStructureViz');
     if (!container) return;
     
-    // Sample business document structure
-    const structure = {
-        "business_id": "String (22 chars)",
-        "name": "String (avg 22 chars)",
-        "address": "String (optional)",
-        "city": "String",
-        "state": "String (2 chars)",
-        "postal_code": "String (5-10 chars)",
-        "latitude": "Number",
-        "longitude": "Number",
-        "stars": "Number (1-5)",
-        "review_count": "Number",
-        "is_open": "Number (0/1)",
-        "attributes": {
-            "type": "Object (nested)",
-            "fields": "~30 variable fields",
-            "depth": "Up to 3 levels"
-        },
-        "categories": "Array of strings (avg 3.2 items)",
-        "hours": {
-            "type": "Object (nested)",
-            "fields": "7 days, open/close times"
-        },
-        "location": {
-            "address": "String",
-            "city": "String",
-            "state": "String",
-            "postal_code": "String",
-            "country": "String (optional)"
-        }
-    };
-    
-    let html = '<div class="document-structure">';
-    html += '<h6>Business Document Structure</h6>';
-    html += '<div class="structure-description">MongoDB\'s flexible schema allows storing complex, nested data in a single document.</div>';
-    html += '<div class="structure-container">';
-    
-    // Create visualization
-    Object.entries(structure).forEach(([key, value]) => {
-        let typeClass = '';
+    try {
+        const response = await fetch('/api/mongodb/document_structure');
+        const structure = await response.json();
         
-        if (typeof value === 'object') {
-            html += `<div class="structure-item nested-item">`;
-            html += `<div class="structure-key">${key}:</div>`;
-            html += `<div class="structure-value">`;
+        let html = '<div class="document-structure">';
+        html += '<h6>Business Document Structure</h6>';
+        html += '<div class="structure-description">MongoDB\'s flexible schema allows storing complex, nested data in a single document.</div>';
+        html += '<div class="structure-container">';
+        
+        // Function to recursively render the structure
+        function renderStructure(obj, indent = 0) {
+            let result = '';
             
-            Object.entries(value).forEach(([subKey, subValue]) => {
-                html += `<div class="structure-subitem">`;
-                html += `<span class="structure-subkey">${subKey}:</span> `;
-                html += `<span class="structure-subvalue">${subValue}</span>`;
-                html += `</div>`;
-            });
+            if (obj.type === 'Object' && obj.fields) {
+                for (const [key, value] of Object.entries(obj.fields)) {
+                    const indentStr = ' '.repeat(indent * 2);
+                    
+                    if (value.type === 'Object') {
+                        result += `<div class="structure-item nested-item">`;
+                        result += `<div class="structure-key">${indentStr}${key}:</div>`;
+                        result += `<div class="structure-value">`;
+                        result += renderStructure(value, indent + 1);
+                        result += `</div></div>`;
+                    } else if (value.type.startsWith('Array')) {
+                        result += `<div class="structure-item">`;
+                        result += `<span class="structure-key">${indentStr}${key}:</span> `;
+                        result += `<span class="structure-value array-type">${value.type}</span>`;
+                        
+                        if (value.items) {
+                            result += `<div class="structure-value" style="margin-left: ${(indent + 1) * 20}px;">`;
+                            result += renderStructure(value.items, indent + 2);
+                            result += `</div>`;
+                        }
+                        
+                        result += `</div>`;
+                    } else {
+                        let typeClass = '';
+                        if (value.type === 'str' || value.type === 'string') typeClass = 'string-type';
+                        else if (value.type === 'int' || value.type === 'float' || value.type === 'number') typeClass = 'number-type';
+                        
+                        result += `<div class="structure-item">`;
+                        result += `<span class="structure-key">${indentStr}${key}:</span> `;
+                        result += `<span class="structure-value ${typeClass}">${value.type}</span>`;
+                        if (value.example) {
+                            result += ` <span class="text-muted">(example: ${value.example})</span>`;
+                        }
+                        result += `</div>`;
+                    }
+                }
+            } else {
+                result += `<div class="structure-item">`;
+                result += `<span class="structure-value">${obj.type || 'Unknown type'}</span>`;
+                if (obj.example) {
+                    result += ` <span class="text-muted">(example: ${obj.example})</span>`;
+                }
+                result += `</div>`;
+            }
             
-            html += `</div></div>`;
-        } else {
-            if (value.includes('String')) typeClass = 'string-type';
-            else if (value.includes('Number')) typeClass = 'number-type';
-            else if (value.includes('Array')) typeClass = 'array-type';
-            
-            html += `<div class="structure-item">`;
-            html += `<span class="structure-key">${key}:</span> `;
-            html += `<span class="structure-value ${typeClass}">${value}</span>`;
-            html += `</div>`;
+            return result;
         }
-    });
-    
-    html += '</div></div>';
-    
-    container.innerHTML = html;
-    
-    // Add some styles
-    const style = document.createElement('style');
-    style.textContent = `
-        .document-structure {
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 15px;
-            background-color: #f9f9f9;
-        }
-        .structure-description {
-            margin-bottom: 15px;
-            color: #666;
-        }
-        .structure-container {
-            font-family: monospace;
-            font-size: 14px;
-        }
-        .structure-item {
-            padding: 4px 0;
-            border-bottom: 1px dotted #eee;
-        }
-        .structure-key {
-            font-weight: bold;
-            color: #333;
-        }
-        .string-type {
-            color: #2e86c1;
-        }
-        .number-type {
-            color: #27ae60;
-        }
-        .array-type {
-            color: #8e44ad;
-        }
-        .nested-item {
-            margin-bottom: 10px;
-        }
-        .structure-subitem {
-            padding-left: 20px;
-            margin: 2px 0;
-        }
-        .structure-subkey {
-            color: #666;
-        }
-    `;
-    document.head.appendChild(style);
+        
+        html += renderStructure(structure);
+        html += '</div></div>';
+        
+        container.innerHTML = html;
+        
+        // Add some styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .document-structure {
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 15px;
+                background-color: #f9f9f9;
+            }
+            .structure-description {
+                margin-bottom: 15px;
+                color: #666;
+            }
+            .structure-container {
+                font-family: monospace;
+                font-size: 14px;
+            }
+            .structure-item {
+                padding: 4px 0;
+                border-bottom: 1px dotted #eee;
+            }
+            .structure-key {
+                font-weight: bold;
+                color: #333;
+            }
+            .string-type {
+                color: #2e86c1;
+            }
+            .number-type {
+                color: #27ae60;
+            }
+            .array-type {
+                color: #8e44ad;
+            }
+            .nested-item {
+                margin-bottom: 10px;
+            }
+            .structure-subitem {
+                padding-left: 20px;
+                margin: 2px 0;
+            }
+            .structure-subkey {
+                color: #666;
+            }
+        `;
+        document.head.appendChild(style);
+    } catch (error) {
+        console.error('Error visualizing document structure:', error);
+        container.innerHTML = '<div class="alert alert-danger">Error loading document structure. Please try again.</div>';
+    }
 }
 
-// Helper function to populate attribute values based on the selected key (demo version)
+// Helper function to populate attribute values based on the selected key
 function populateAttributeValues(key) {
     const valueDropdown = document.getElementById('mongodbAttributeValue');
     if (!valueDropdown) return;
@@ -1347,9 +1122,6 @@ function populateAttributeValues(key) {
 
 // Initialize MongoDB event listeners
 function initializeMongoDBEventListeners() {
-    // Original business load
-    document.getElementById('loadMongoDBBusinesses')?.addEventListener('click', loadMongoDBBusinesses);
-    
     // Business search listeners
     document.getElementById('mongodbSearchButton')?.addEventListener('click', () => searchMongoDBBusinesses(1));
     document.getElementById('mongodbClearButton')?.addEventListener('click', clearMongoDBSearch);
