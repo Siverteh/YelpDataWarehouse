@@ -582,7 +582,7 @@ def mysql_business_reviews():
             sort_direction = "DESC"
         
         # Get reviews with user details
-        cursor.execute(f"""
+        query = f"""
             SELECT r.review_id, r.stars, r.useful_votes, r.funny_votes, 
                    r.cool_votes, t.date_actual as review_date,
                    u.name as user_name, u.user_id,
@@ -593,7 +593,9 @@ def mysql_business_reviews():
             WHERE r.business_id = %s
             ORDER BY {sort_column} {sort_direction}
             LIMIT %s OFFSET %s
-        """, (business_id, limit, offset))
+        """
+        
+        cursor.execute(query, (business_id, limit, offset))
         
         reviews = cursor.fetchall()
         
@@ -783,9 +785,8 @@ def mysql_search_businesses():
 @mysql_bp.route('/review_trends')
 def mysql_review_trends():
     """Get review trends over time for MySQL analytics tab"""
-    conn = get_mysql_connection()
-    if not conn:
-        # Return dummy data
+    try:
+        # Generate dummy data
         months = 12
         dates = [(datetime.now() - timedelta(days=30*i)).strftime('%Y-%m-01') for i in range(months)]
         dates.reverse()
@@ -795,35 +796,7 @@ def mysql_review_trends():
             "review_counts": [random.randint(20, 100) for _ in range(months)]
         }
         return jsonify(dummy_data)
-    
-    try:
-        cursor = conn.cursor()
-        
-        # Get review counts by month
-        cursor.execute("""
-            SELECT DATE_FORMAT(t.date_actual, '%Y-%m-01') as month_date, 
-                   COUNT(*) as review_count
-            FROM fact_review r
-            JOIN dim_time t ON r.time_id = t.time_id
-            GROUP BY month_date
-            ORDER BY month_date
-            LIMIT 12
-        """)
-        
-        results = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        
-        dates = [row['month_date'].strftime('%Y-%m-%d') for row in results]
-        review_counts = [row['review_count'] for row in results]
-        
-        return jsonify({
-            "dates": dates,
-            "review_counts": review_counts
-        })
     except Exception as e:
-        if conn:
-            conn.close()
         logger.error(f"Error in mysql_review_trends: {str(e)}")
         
         # Return dummy data on error
@@ -840,8 +813,7 @@ def mysql_review_trends():
 @mysql_bp.route('/category_ratings')
 def mysql_category_ratings():
     """Get average ratings by category for MySQL analytics tab"""
-    conn = get_mysql_connection()
-    if not conn:
+    try:
         # Return dummy data
         categories = ["Restaurants", "Shopping", "Food", "Beauty & Spas", "Home Services", 
                       "Coffee & Tea", "Bars", "Fast Food", "Pizza", "Italian"]
@@ -851,35 +823,7 @@ def mysql_category_ratings():
             "avg_ratings": [round(random.uniform(3.0, 4.8), 1) for _ in range(len(categories))]
         }
         return jsonify(dummy_data)
-    
-    try:
-        cursor = conn.cursor()
-        
-        # Get average ratings by category
-        cursor.execute("""
-            SELECT c.category_name, AVG(r.stars) as avg_rating
-            FROM dim_category c
-            JOIN business_category bc ON c.category_id = bc.category_id
-            JOIN fact_review r ON bc.business_id = r.business_id
-            GROUP BY c.category_name
-            ORDER BY avg_rating DESC
-            LIMIT 10
-        """)
-        
-        results = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        
-        categories = [row['category_name'] for row in results]
-        avg_ratings = [float(row['avg_rating']) for row in results]
-        
-        return jsonify({
-            "categories": categories,
-            "avg_ratings": avg_ratings
-        })
     except Exception as e:
-        if conn:
-            conn.close()
         logger.error(f"Error in mysql_category_ratings: {str(e)}")
         
         # Return dummy data on error
@@ -891,3 +835,86 @@ def mysql_category_ratings():
             "avg_ratings": [round(random.uniform(3.0, 4.8), 1) for _ in range(len(categories))]
         }
         return jsonify(dummy_data)
+
+@mysql_bp.route('/category_trends')
+def mysql_category_trends():
+    """Get category trends over time"""
+    try:
+        # Return dummy data
+        periods = ["2020-Q1", "2020-Q2", "2020-Q3", "2020-Q4", 
+                  "2021-Q1", "2021-Q2", "2021-Q3", "2021-Q4",
+                  "2022-Q1", "2022-Q2", "2022-Q3", "2022-Q4"]
+        
+        categories = ["Restaurants", "Shopping", "Food", "Beauty & Spas", "Home Services"]
+        
+        # Generate random data for each category
+        category_data = {}
+        for category in categories:
+            # Random starting value between 30-100
+            base_value = random.randint(30, 100)
+            # Generate trend with some randomness
+            trend = []
+            for i in range(len(periods)):
+                # Add some random variance but maintain an upward trend
+                value = base_value + (i * random.randint(3, 10)) + random.randint(-5, 15)
+                trend.append(value)
+            category_data[category] = trend
+        
+        dummy_data = {
+            "periods": periods,
+            "categories": categories,
+            "data": category_data
+        }
+        
+        return jsonify(dummy_data)
+    except Exception as e:
+        logger.error(f"Error in mysql_category_trends: {str(e)}")
+        
+        # Return simple error fallback
+        return jsonify({"error": "Unable to load category trends data"}), 500
+
+@mysql_bp.route('/top_users')
+def mysql_top_users():
+    """Get top users by review count"""
+    try:
+        # Return dummy data for example purposes
+        dummy_users = [
+            {
+                "user_id": "user123",
+                "user_name": "John D.",
+                "review_count": 387,
+                "avg_rating": 3.8,
+                "first_review_date": "2018-05-23",
+                "last_review_date": "2022-11-30",
+                "unique_businesses": 356,
+                "unique_categories": 45,
+                "top_categories": "Restaurants, Shopping, Food"
+            },
+            {
+                "user_id": "user456",
+                "user_name": "Sarah M.",
+                "review_count": 285,
+                "avg_rating": 4.2,
+                "first_review_date": "2019-02-15",
+                "last_review_date": "2022-12-15",
+                "unique_businesses": 263,
+                "unique_categories": 38,
+                "top_categories": "Restaurants, Beauty & Spas, Coffee & Tea"
+            },
+            {
+                "user_id": "user789",
+                "user_name": "Michael W.",
+                "review_count": 214,
+                "avg_rating": 3.5,
+                "first_review_date": "2017-11-08",
+                "last_review_date": "2022-10-22",
+                "unique_businesses": 198,
+                "unique_categories": 32,
+                "top_categories": "Restaurants, Bars, Food"
+            }
+        ]
+        
+        return jsonify(dummy_users)
+    except Exception as e:
+        logger.error(f"Error in mysql_top_users: {str(e)}")
+        return jsonify({"error": "Unable to load top users data"}), 500

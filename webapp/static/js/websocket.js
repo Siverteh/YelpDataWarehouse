@@ -1,5 +1,3 @@
-// Create a new file: webapp/static/js/websocket.js
-
 /**
  * WebSocket functionality for real-time updates in the Yelp Data Warehouse Dashboard
  */
@@ -15,13 +13,8 @@ function initWebSocket() {
         socket.close();
     }
     
-    // Create a new connection
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/socket.io/?EIO=4&transport=websocket`;
-    
-    console.log('Connecting to WebSocket:', wsUrl);
-    
     try {
+        // Create socket.io connection without explicitly constructing the URL
         socket = io();
         
         // Connection opened

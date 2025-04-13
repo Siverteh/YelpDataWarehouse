@@ -1,4 +1,3 @@
-# Now modify webapp/app.py to incorporate SocketIO
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 import logging
@@ -16,7 +15,8 @@ from utility_routes import utility_bp
 
 # Initialize Flask app
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+app.config['SECRET_KEY'] = 'your-secret-key-here'
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # Register blueprints
 app.register_blueprint(mysql_bp)

@@ -269,64 +269,6 @@ function clearMySQLSearch() {
     document.getElementById('mysqlSearchPagination').classList.add('d-none');
 }
 
-// Load MySQL Top Businesses
-async function loadMySQLBusinesses() {
-    const category = document.getElementById('mysqlCategorySelect').value;
-    const limit = document.getElementById('mysqlLimitSelect').value;
-    
-    // Show loader
-    document.getElementById('mysqlBusinessesLoader').classList.remove('d-none');
-    document.getElementById('mysqlBusinessesTable').innerHTML = '';
-    
-    try {
-        const response = await fetch(`/api/mysql/top_businesses?category=${encodeURIComponent(category)}&limit=${limit}`);
-        const responseData = await response.json();
-        
-        // Extract businesses array from response, handling both direct array and nested object formats
-        const businesses = Array.isArray(responseData) ? responseData : responseData.businesses || [];
-        
-        // Create table
-        let tableHtml = `
-            <table class="table table-hover business-table">
-                <thead>
-                    <tr>
-                        <th>Business Name</th>
-                        <th>City</th>
-                        <th>State</th>
-                        <th>Stars</th>
-                        <th>Reviews</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        
-        businesses.forEach(business => {
-            tableHtml += `
-                <tr data-business-id="${business.business_id}" onclick="showMySQLBusinessDetails('${business.business_id}', '${business.business_name || business.name}')">
-                    <td>${business.business_name || business.name}</td>
-                    <td>${business.city || 'N/A'}</td>
-                    <td>${business.state || 'N/A'}</td>
-                    <td>${formatStarRating(business.stars)}</td>
-                    <td>${business.review_count || 'N/A'}</td>
-                </tr>
-            `;
-        });
-        
-        tableHtml += `
-                </tbody>
-            </table>
-        `;
-        
-        document.getElementById('mysqlBusinessesTable').innerHTML = tableHtml;
-    } catch (error) {
-        console.error('Error loading businesses:', error);
-        document.getElementById('mysqlBusinessesTable').innerHTML = '<div class="alert alert-danger">Error loading businesses. Please try again.</div>';
-    } finally {
-        // Hide loader
-        document.getElementById('mysqlBusinessesLoader').classList.add('d-none');
-    }
-}
-
 // Load business reviews
 async function loadBusinessReviews(businessId, page = 1, sort = 'date_desc') {
     const limit = 5; // Reviews per page
@@ -696,7 +638,7 @@ async function loadMySQLAnalytics() {
             }
         });
         
-        // Monthly distribution chart (dummy data for now)
+        // Monthly distribution chart (use dummy data for now)
         const monthlyDistributionCtx = document.getElementById('mysqlMonthlyDistributionChart').getContext('2d');
         if (mysqlMonthlyDistributionChart) {
             mysqlMonthlyDistributionChart.destroy();
@@ -1193,9 +1135,6 @@ function initializeMySQLEventListeners() {
     document.getElementById('mysqlSearchButton')?.addEventListener('click', () => searchMySQLBusinesses(1));
     document.getElementById('mysqlClearButton')?.addEventListener('click', clearMySQLSearch);
     
-    // Business list tab
-    document.getElementById('loadMySQLBusinesses')?.addEventListener('click', loadMySQLBusinesses);
-    
     // Tab change events
     document.getElementById('mysql-overview-tab')?.addEventListener('shown.bs.tab', function (e) {
         loadMySQLOverviewStats();
@@ -1255,10 +1194,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeMySQLEventListeners();
     
     // Load initial data if elements exist
-    if (document.getElementById('mysqlBusinessesTable')) {
-        loadMySQLBusinesses();
-    }
-    
     if (document.getElementById('mysqlCategoriesChart')) {
         loadMySQLOverviewStats();
     }
