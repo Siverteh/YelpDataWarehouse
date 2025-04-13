@@ -490,9 +490,20 @@ async function showMySQLBusinessDetails(businessId, businessName) {
         document.getElementById('mysqlBusinessDetailsRating').innerHTML = `${formatStarRating(business.stars)} (${business.avg_rating ? business.avg_rating.toFixed(1) : 'N/A'} avg)`;
         document.getElementById('mysqlBusinessDetailsReviews').textContent = business.review_count || business.total_reviews || 'N/A';
         
-        // Fix checkins display - use N/A only if truly not available
-        const checkinsText = business.total_checkins || business.checkin_count || 0;
-        document.getElementById('mysqlBusinessDetailsCheckins').textContent = checkinsText > 0 ? checkinsText : 'No checkins recorded';
+        // Improved checkins count calculation
+        // Calculate total checkins from the checkins_by_month data if available
+        let totalCheckins = 0;
+        
+        if (data.checkins_by_month && data.checkins_by_month.length > 0) {
+            // Sum up all checkin counts from the monthly data
+            totalCheckins = data.checkins_by_month.reduce((sum, month) => sum + (month.checkin_count || 0), 0);
+        } else {
+            // Fall back to the business summary data
+            totalCheckins = business.total_checkins || business.checkin_count || 0;
+        }
+        
+        document.getElementById('mysqlBusinessDetailsCheckins').textContent = 
+            totalCheckins > 0 ? totalCheckins : 'No checkins recorded';
         
         // Create chart for reviews and checkins by month
         const reviewsData = data.reviews_by_month || [];
@@ -570,15 +581,36 @@ async function showMySQLBusinessDetails(businessId, businessName) {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
-                    title: {
-                        display: true,
-                        text: 'Monthly Activity'
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            boxWidth: 12,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
                     }
                 },
                 scales: {
+                    x: {
+                        ticks: {
+                            autoSkip: true,
+                            maxTicksLimit: 15,
+                            maxRotation: 45,
+                            minRotation: 0
+                        }
+                    },
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
                     }
                 }
             }
@@ -1202,4 +1234,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('sqlQuerySelect')) {
         handleSqlQuerySelection();
     }
+});
+
+
+document.getElementById('mysql-businesses-tab').addEventListener('shown.bs.tab', function() {
+    searchMySQLBusinesses(1);
 });

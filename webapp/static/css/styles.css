@@ -92,3 +92,13 @@
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+.chart-container {
+    position: relative;
+    margin: auto;
+    overflow: hidden;
+}
+
+.chart-container canvas {
+    max-width: 100%;
+}

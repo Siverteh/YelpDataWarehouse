@@ -158,21 +158,18 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <h6>Business Information</h6>
                             <dl class="row">
-                                <dt class="col-sm-4">Location:</dt>
-                                <dd class="col-sm-8" id="mysqlBusinessDetailsLocation"></dd>
-                                <dt class="col-sm-4">Rating:</dt>
-                                <dd class="col-sm-8" id="mysqlBusinessDetailsRating"></dd>
-                                <dt class="col-sm-4">Reviews:</dt>
-                                <dd class="col-sm-8" id="mysqlBusinessDetailsReviews"></dd>
-                                <dt class="col-sm-4">Checkins:</dt>
-                                <dd class="col-sm-8" id="mysqlBusinessDetailsCheckins"></dd>
+                                <dt class="col-sm-2">Location:</dt>
+                                <dd class="col-sm-10" id="mysqlBusinessDetailsLocation"></dd>
+                                <dt class="col-sm-2">Rating:</dt>
+                                <dd class="col-sm-10" id="mysqlBusinessDetailsRating"></dd>
+                                <dt class="col-sm-2">Reviews:</dt>
+                                <dd class="col-sm-10" id="mysqlBusinessDetailsReviews"></dd>
+                                <dt class="col-sm-2">Checkins:</dt>
+                                <dd class="col-sm-10" id="mysqlBusinessDetailsCheckins"></dd>
                             </dl>
-                        </div>
-                        <div class="col-md-6">
-                            <canvas id="mysqlBusinessDetailsChart"></canvas>
                         </div>
                     </div>
                     
@@ -191,14 +188,20 @@
                         </ul>
                         
                         <div class="tab-content mt-3" id="businessDetailsTabContent">
-                            <!-- Performance Tab (existing chart) -->
+                            <!-- Performance Tab (with fixed height chart) -->
                             <div class="tab-pane fade show active" id="performance-content" role="tabpanel">
-                                <!-- Canvas is already defined above in the main business details -->
-                                <div class="alert alert-info">
-                                    <strong>Performance Analysis:</strong> This chart shows the monthly distribution of reviews and checkins over time for this business, helping you understand customer engagement patterns.
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="card-title mb-0">Monthly Activity</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="height: 350px; width: 100%; position: relative;">
+                                            <canvas id="mysqlBusinessDetailsChart"></canvas>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            
+                                                        
                             <!-- Reviews Tab -->
                             <div class="tab-pane fade" id="reviews-content" role="tabpanel">
                                 <div class="mb-3">
@@ -227,13 +230,8 @@
                                 </div>
                             </div>
                             
-                            <!-- Checkins Tab -->
+                            <!-- Checkins Tab (removed info line) -->
                             <div class="tab-pane fade" id="checkins-content" role="tabpanel">
-                                <div class="alert alert-info mb-3">
-                                    <i class="bi bi-info-circle"></i> 
-                                    <strong>What are checkins?</strong> Checkins represent when Yelp users have physically visited a business and recorded their visit in the Yelp app.
-                                </div>
-                                
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="card">
@@ -262,7 +260,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </div> <!-- IMPORTANT: Properly closing the mysql-businesses tab-pane -->
 
     <!-- MySQL Analytics -->
     <div class="tab-pane fade" id="mysql-analytics" role="tabpanel">
@@ -469,11 +467,6 @@
                     
                     <!-- SQL Explorer Tab -->
                     <div class="tab-pane fade" id="sql-explorer-content" role="tabpanel">
-                        <div class="alert alert-info mb-3">
-                            <i class="bi bi-info-circle me-2"></i>
-                            <strong>SQL Explorer</strong> demonstrates the power of a relational data warehouse by allowing you to run pre-defined analytical queries.
-                        </div>
-                        
                         <div class="row mb-3">
                             <div class="col-md-12">
                                 <div class="form-group">
