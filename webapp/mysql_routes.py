@@ -228,6 +228,184 @@ def mysql_top_businesses():
         logger.error(f"Error in mysql_top_businesses: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@mysql_bp.route('/business_checkins')
+def mysql_business_checkins():
+    """Get checkin patterns for a specific business"""
+    business_id = request.args.get('business_id')
+    
+    if not business_id:
+        return jsonify({"error": "Business ID is required"}), 400
+    
+    conn = get_mysql_connection()
+    if not conn:
+        # Return dummy data
+        dummy_data = {
+            "day_distribution": [15, 12, 18, 22, 35, 45, 30],  # Sun through Sat
+            "month_distribution": [20, 18, 25, 30, 35, 42, 45, 40, 32, 28, 25, 30],  # Jan through Dec
+            "hour_distribution": [
+                2, 1, 0, 0, 0, 1, 5, 10, 15, 18, 20, 25,
+                30, 28, 22, 20, 23, 28, 35, 30, 25, 18, 12, 5
+            ]  # Hours 0-23
+        }
+        return jsonify(dummy_data)
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get checkin day distribution
+        cursor.execute("""
+            SELECT 
+                DAYOFWEEK(t.date_actual) as day_of_week,
+                SUM(c.checkin_count) as checkin_count
+            FROM fact_checkin c
+            JOIN dim_time t ON c.time_id = t.time_id
+            WHERE c.business_id = %s
+            GROUP BY day_of_week
+            ORDER BY day_of_week
+        """, (business_id,))
+        
+        days_result = cursor.fetchall()
+        
+        # Initialize with zeros for all days
+        day_distribution = [0] * 7
+        
+        # Fill in actual values (DAYOFWEEK returns 1=Sunday, 2=Monday, etc.)
+        for row in days_result:
+            day_index = row['day_of_week'] - 1  # Convert to 0-based index
+            day_distribution[day_index] = row['checkin_count']
+        
+        # Get checkin month distribution
+        cursor.execute("""
+            SELECT 
+                t.month_actual as month,
+                SUM(c.checkin_count) as checkin_count
+            FROM fact_checkin c
+            JOIN dim_time t ON c.time_id = t.time_id
+            WHERE c.business_id = %s
+            GROUP BY month
+            ORDER BY month
+        """, (business_id,))
+        
+        months_result = cursor.fetchall()
+        
+        # Initialize with zeros for all months
+        month_distribution = [0] * 12
+        
+        # Fill in actual values
+        for row in months_result:
+            month_index = row['month'] - 1  # Convert to 0-based index
+            month_distribution[month_index] = row['checkin_count']
+        
+        cursor.close()
+        conn.close()
+        
+        result = {
+            "day_distribution": day_distribution,
+            "month_distribution": month_distribution
+            # We can't include hour distribution since we don't have that data in our schema
+        }
+        
+        return jsonify(result)
+    except Exception as e:
+        if conn:
+            conn.close()
+        logger.error(f"Error in mysql_business_checkins: {str(e)}")
+        
+        # Return dummy data on error
+        dummy_data = {
+            "day_distribution": [15, 12, 18, 22, 35, 45, 30],  # Sun through Sat
+            "month_distribution": [20, 18, 25, 30, 35, 42, 45, 40, 32, 28, 25, 30],  # Jan through Dec
+            "hour_distribution": [
+                2, 1, 0, 0, 0, 1, 5, 10, 15, 18, 20, 25,
+                30, 28, 22, 20, 23, 28, 35, 30, 25, 18, 12, 5
+            ]  # Hours 0-23
+        }
+        return jsonify(dummy_data)
+
+@mysql_bp.route('/city_ratings')
+def mysql_city_ratings():
+    """Get rating distribution by city"""
+    state = request.args.get('state')
+    limit = int(request.args.get('limit', 20))
+    
+    conn = get_mysql_connection()
+    if not conn:
+        # Return dummy data
+        dummy_data = [
+            {"city": "Las Vegas", "state": "NV", "business_count": 450, "avg_rating": 4.2, "total_reviews": 25000, 
+             "five_star_count": 200, "four_star_count": 150, "three_star_count": 75, "two_star_count": 20, "one_star_count": 5},
+            {"city": "Phoenix", "state": "AZ", "business_count": 350, "avg_rating": 4.0, "total_reviews": 18000,
+             "five_star_count": 150, "four_star_count": 120, "three_star_count": 60, "two_star_count": 15, "one_star_count": 5},
+            {"city": "Philadelphia", "state": "PA", "business_count": 300, "avg_rating": 3.9, "total_reviews": 15000,
+             "five_star_count": 120, "four_star_count": 100, "three_star_count": 60, "two_star_count": 15, "one_star_count": 5}
+        ]
+        return jsonify(dummy_data)
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Base query
+        query = """
+            SELECT 
+                l.city,
+                l.state,
+                COUNT(DISTINCT b.business_id) as business_count,
+                AVG(b.stars) as avg_rating,
+                SUM(b.review_count) as total_reviews,
+                COUNT(CASE WHEN b.stars >= 4.5 THEN 1 END) as five_star_count,
+                COUNT(CASE WHEN b.stars >= 3.5 AND b.stars < 4.5 THEN 1 END) as four_star_count,
+                COUNT(CASE WHEN b.stars >= 2.5 AND b.stars < 3.5 THEN 1 END) as three_star_count,
+                COUNT(CASE WHEN b.stars >= 1.5 AND b.stars < 2.5 THEN 1 END) as two_star_count,
+                COUNT(CASE WHEN b.stars < 1.5 THEN 1 END) as one_star_count
+            FROM 
+                dim_business b
+                JOIN dim_location l ON b.location_id = l.location_id
+        """
+        
+        params = []
+        
+        # Add state filter if provided
+        if state:
+            query += " WHERE l.state = %s"
+            params.append(state)
+        
+        query += """
+            GROUP BY 
+                l.city, l.state
+            HAVING 
+                COUNT(DISTINCT b.business_id) > 5
+            ORDER BY 
+                business_count DESC
+            LIMIT %s
+        """
+        params.append(limit)
+        
+        cursor.execute(query, params)
+        cities = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        # Convert Decimal objects for JSON serialization
+        result = json.loads(json.dumps(cities, default=json_serialize))
+        
+        return jsonify(result)
+    except Exception as e:
+        if conn:
+            conn.close()
+        logger.error(f"Error in mysql_city_ratings: {str(e)}")
+        
+        # Return dummy data on error
+        dummy_data = [
+            {"city": "Las Vegas", "state": "NV", "business_count": 450, "avg_rating": 4.2, "total_reviews": 25000, 
+             "five_star_count": 200, "four_star_count": 150, "three_star_count": 75, "two_star_count": 20, "one_star_count": 5},
+            {"city": "Phoenix", "state": "AZ", "business_count": 350, "avg_rating": 4.0, "total_reviews": 18000,
+             "five_star_count": 150, "four_star_count": 120, "three_star_count": 60, "two_star_count": 15, "one_star_count": 5},
+            {"city": "Philadelphia", "state": "PA", "business_count": 300, "avg_rating": 3.9, "total_reviews": 15000,
+             "five_star_count": 120, "four_star_count": 100, "three_star_count": 60, "two_star_count": 15, "one_star_count": 5}
+        ]
+        return jsonify(dummy_data)
+
 @mysql_bp.route('/business_performance')
 def mysql_business_performance():
     business_id = request.args.get('business_id')
