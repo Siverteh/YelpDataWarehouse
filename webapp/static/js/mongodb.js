@@ -81,7 +81,6 @@ async function loadMongoDBOverviewStats() {
                 responsive: true
             }
         });
-        
     } catch (error) {
         console.error('Error loading MongoDB overview stats:', error);
     }
@@ -89,7 +88,7 @@ async function loadMongoDBOverviewStats() {
 
 // Format number with commas for better readability
 function formatNumber(num) {
-    if (num === undefined || num === null) return 'N/A';
+    if (num === undefined || num === null) return '0';
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
@@ -186,7 +185,7 @@ async function searchMongoDBBusinesses(page = 1) {
             // Show total count
             const totalResultsDiv = document.createElement('div');
             totalResultsDiv.className = 'mb-3';
-            totalResultsDiv.innerHTML = `<strong>Found ${formatNumber(pagination.total)} businesses matching your criteria.</strong>`;
+            totalResultsDiv.innerHTML = `<strong>Found ${formatNumber(pagination.total)} businesses.</strong>`;
             document.getElementById('mongodbSearchResults').appendChild(totalResultsDiv);
             
             let tableHtml = `
@@ -205,42 +204,45 @@ async function searchMongoDBBusinesses(page = 1) {
             `;
             
             businesses.forEach(business => {
-                // Extract city and state with improved handling of location structures
-                let city = 'N/A';
-                let state = 'N/A';
-                
-                // Handle different location structures
-                if (business.location) {
-                    if (typeof business.location === 'object') {
-                        city = business.location.city || business.location.address?.city || 'N/A';
-                        state = business.location.state || business.location.address?.state || 'N/A';
-                    } else if (typeof business.location === 'string') {
-                        const parts = business.location.split(',');
-                        if (parts.length >= 2) {
-                            city = parts[0].trim();
-                            state = parts[1].trim();
-                        }
-                    }
-                } else {
-                    // Try direct properties
-                    city = business.city || 'N/A';
-                    state = business.state || 'N/A';
-                }
-                
                 // Extract business name safely
-                const businessName = business.name || business.business_name || 'Unnamed Business';
+                const businessName = business.name || 'Unnamed Business';
                 
-                // Escape any special characters in the business name to avoid JS errors when clicked
+                // Escape any special characters in the business name
                 const escapedBusinessName = businessName.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                 
                 // Extract business ID safely
-                const businessId = business.business_id || business._id || '';
+                const businessId = business.business_id || '';
                 
+                // Extract city and state properly based on Yelp dataset structure
+                let city = '';
+                let state = '';
+                
+                // Check for city/state in all possible locations
+                if (business.city) {
+                    city = business.city;
+                } else if (business.address && business.address.city) {
+                    city = business.address.city;
+                } else if (business.location && typeof business.location === 'object') {
+                    city = business.location.city || '';
+                }
+                
+                if (business.state) {
+                    state = business.state;
+                } else if (business.address && business.address.state) {
+                    state = business.address.state;
+                } else if (business.location && typeof business.location === 'object') {
+                    state = business.location.state || '';
+                }
+                
+                // Store city/state as data attributes for use when displaying business details
                 tableHtml += `
-                    <tr data-business-id="${businessId}" onclick="showMongoDBBusinessDetails('${businessId}', '${escapedBusinessName}')">
+                    <tr data-business-id="${businessId}" 
+                        data-city="${city}" 
+                        data-state="${state}" 
+                        onclick="showMongoDBBusinessDetails('${businessId}', '${escapedBusinessName}', '${city}', '${state}')">
                         <td>${businessName}</td>
-                        <td>${city}</td>
-                        <td>${state}</td>
+                        <td>${city || 'N/A'}</td>
+                        <td>${state || 'N/A'}</td>
                         <td>${formatStarRating(business.stars)}</td>
                         <td>${formatNumber(business.review_count)}</td>
                     </tr>
@@ -319,8 +321,8 @@ function clearMongoDBSearch() {
     document.getElementById('mongodbSearchPagination').classList.add('d-none');
 }
 
-// Show MongoDB Business Details
-async function showMongoDBBusinessDetails(businessId, businessName) {
+// Show MongoDB Business Details - FIXED to use passed city/state
+async function showMongoDBBusinessDetails(businessId, businessName, city = '', state = '') {
     document.getElementById('mongodbBusinessDetails').classList.remove('d-none');
     document.getElementById('mongodbBusinessDetailsName').textContent = businessName;
     document.getElementById('mongodbBusinessDetails').setAttribute('data-business-id', businessId);
@@ -330,34 +332,49 @@ async function showMongoDBBusinessDetails(businessId, businessName) {
         const data = await response.json();
         
         // Update business details
-        const business = data.business;
+        const business = data.business || {};
         
-        // Handle nested location correctly with improved robustness
-        let city = 'N/A';
-        let state = 'N/A';
+        // Use location data that was passed through from the search results
+        // This ensures location is consistent between search and details
+        let locationDisplay = '';
         
-        // Check all possible location formats
-        if (business.location) {
-            if (typeof business.location === 'object') {
-                city = business.location.city || business.location.address?.city || 'N/A';
-                state = business.location.state || business.location.address?.state || 'N/A';
-            } else if (typeof business.location === 'string') {
-                const parts = business.location.split(',');
-                if (parts.length >= 2) {
-                    city = parts[0].trim();
-                    state = parts[1].trim();
-                }
+        // First try to use city/state passed from search results (most reliable)
+        if (city || state) {
+            locationDisplay = `${city}${city && state ? ', ' : ''}${state}`;
+        } 
+        // If not provided, try to extract from business data
+        else {
+            // Extract city from business data
+            let businessCity = '';
+            if (business.city) {
+                businessCity = business.city;
+            } else if (business.address && business.address.city) {
+                businessCity = business.address.city;
+            } else if (business.location && typeof business.location === 'object') {
+                businessCity = business.location.city || '';
             }
-        } else {
-            // Try direct properties
-            city = business.city || 'N/A';
-            state = business.state || 'N/A';
+            
+            // Extract state from business data
+            let businessState = '';
+            if (business.state) {
+                businessState = business.state;
+            } else if (business.address && business.address.state) {
+                businessState = business.address.state;
+            } else if (business.location && typeof business.location === 'object') {
+                businessState = business.location.state || '';
+            }
+            
+            locationDisplay = `${businessCity}${businessCity && businessState ? ', ' : ''}${businessState}`;
         }
         
-        document.getElementById('mongodbBusinessDetailsLocation').textContent = `${city}, ${state}`;
+        // Set location display
+        document.getElementById('mongodbBusinessDetailsLocation').textContent = 
+            locationDisplay || 'Location not available';
+        
+        // Format rating display
         document.getElementById('mongodbBusinessDetailsRating').innerHTML = formatStarRating(business.stars);
         
-        // Handle review counts from different possible structures
+        // Handle review counts
         let reviewCount = 0;
         if (business.review_count) {
             reviewCount = business.review_count;
@@ -366,17 +383,14 @@ async function showMongoDBBusinessDetails(businessId, businessName) {
         }
         document.getElementById('mongodbBusinessDetailsReviews').textContent = formatNumber(reviewCount);
         
-        // Handle checkin counts from different possible structures
+        // Handle checkin counts
         let checkinCount = 0;
-        
-        // Try all possible checkin data structures
         if (business.checkins && business.checkins.total_checkins) {
             checkinCount = business.checkins.total_checkins;
         } else if (data.checkins_by_month && data.checkins_by_month.length > 0) {
             // Sum up all checkin counts from the monthly data
             checkinCount = data.checkins_by_month.reduce((sum, month) => sum + (month.checkin_count || 0), 0);
         }
-        
         document.getElementById('mongodbBusinessDetailsCheckins').textContent = formatNumber(checkinCount);
         
         // Display business attributes if they exist
@@ -385,25 +399,32 @@ async function showMongoDBBusinessDetails(businessId, businessName) {
             let attributesHtml = '<div class="row">';
             
             // Convert attributes object to a list of key-value pairs
-            const attributes = Object.entries(business.attributes).sort((a, b) => a[0].localeCompare(b[0]));
+            let attributes = [];
+            if (typeof business.attributes === 'object') {
+                attributes = Object.entries(business.attributes).sort((a, b) => a[0].localeCompare(b[0]));
+            }
             
-            // Display attributes in a responsive grid
-            attributes.forEach(([key, value]) => {
-                let displayValue = value;
-                
-                // Handle nested attributes or boolean values
-                if (typeof value === 'object') {
-                    displayValue = JSON.stringify(value);
-                } else if (typeof value === 'boolean') {
-                    displayValue = value ? 'Yes' : 'No';
-                }
-                
-                attributesHtml += `
-                    <div class="col-md-4 mb-2">
-                        <strong>${key.replace(/_/g, ' ')}:</strong> ${displayValue}
-                    </div>
-                `;
-            });
+            if (attributes.length > 0) {
+                // Display attributes in a responsive grid
+                attributes.forEach(([key, value]) => {
+                    let displayValue = value;
+                    
+                    // Handle nested attributes or boolean values
+                    if (typeof value === 'object') {
+                        displayValue = JSON.stringify(value);
+                    } else if (typeof value === 'boolean') {
+                        displayValue = value ? 'Yes' : 'No';
+                    }
+                    
+                    attributesHtml += `
+                        <div class="col-md-4 mb-2">
+                            <strong>${key.replace(/_/g, ' ')}:</strong> ${displayValue}
+                        </div>
+                    `;
+                });
+            } else {
+                attributesHtml += '<div class="col-12">No attributes data available</div>';
+            }
             
             attributesHtml += '</div>';
             attributesContainer.innerHTML = attributesHtml;
@@ -699,7 +720,7 @@ async function loadMongoDBBusinessCheckins(businessId) {
             // Create a heat map-like visualization
             const hours = Array.from({ length: 24 }, (_, i) => i);
             const hourData = data.hour_distribution;
-            const maxValue = Math.max(...hourData);
+            const maxValue = Math.max(...hourData, 1);  // Ensure we don't divide by zero
             
             let html = '<div class="hour-heatmap">';
             hours.forEach(hour => {
@@ -764,7 +785,7 @@ async function loadMongoDBBusinessCheckins(businessId) {
     }
 }
 
-// Load MongoDB Analytics
+// Load MongoDB Analytics - FIXED to properly display document size data
 async function loadMongoDBAnalytics() {
     try {
         // Document size distribution
@@ -812,18 +833,13 @@ async function loadMongoDBAnalytics() {
         }
         
         mongodbAttributesChart = new Chart(attributesCtx, {
-            type: 'radar',
+            type: 'bar',
             data: {
                 labels: attributesData.attribute_names,
                 datasets: [{
                     label: 'Business Attributes',
                     data: attributesData.attribute_counts,
-                    backgroundColor: 'rgba(46, 204, 113, 0.2)',
-                    borderColor: 'rgba(46, 204, 113, 1)',
-                    pointBackgroundColor: 'rgba(46, 204, 113, 1)',
-                    pointBorderColor: '#fff',
-                    pointHoverBackgroundColor: '#fff',
-                    pointHoverBorderColor: 'rgba(46, 204, 113, 1)'
+                    backgroundColor: 'rgba(46, 204, 113, 0.7)'
                 }]
             },
             options: {
@@ -832,6 +848,11 @@ async function loadMongoDBAnalytics() {
                     title: {
                         display: true,
                         text: 'Business Attributes Distribution'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
                     }
                 }
             }
@@ -888,7 +909,7 @@ async function loadSchemaStatistics() {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'MongoDB Collection Schema Statistics'
+                        text: 'Collection Schema Statistics'
                     }
                 },
                 scales: {
@@ -964,7 +985,6 @@ async function visualizeDocumentStructure() {
         
         let html = '<div class="document-structure">';
         html += '<h6>Business Document Structure</h6>';
-        html += '<div class="structure-description">MongoDB\'s flexible schema allows storing complex, nested data in a single document.</div>';
         html += '<div class="structure-container">';
         
         // Function to recursively render the structure
@@ -981,7 +1001,7 @@ async function visualizeDocumentStructure() {
                         result += `<div class="structure-value">`;
                         result += renderStructure(value, indent + 1);
                         result += `</div></div>`;
-                    } else if (value.type.startsWith('Array')) {
+                    } else if (value.type && value.type.startsWith('Array')) {
                         result += `<div class="structure-item">`;
                         result += `<span class="structure-key">${indentStr}${key}:</span> `;
                         result += `<span class="structure-value array-type">${value.type}</span>`;
@@ -1033,10 +1053,6 @@ async function visualizeDocumentStructure() {
                 padding: 15px;
                 background-color: #f9f9f9;
             }
-            .structure-description {
-                margin-bottom: 15px;
-                color: #666;
-            }
             .structure-container {
                 font-family: monospace;
                 font-size: 14px;
@@ -1084,29 +1100,20 @@ function populateAttributeValues(key) {
     // Clear existing options
     valueDropdown.innerHTML = '<option value="">Any value</option>';
     
-    // Set values based on key
+    // Set values based on key - FIXED to match actual Yelp dataset attributes
     let values = [];
     
     switch (key) {
         case 'RestaurantsPriceRange2':
             values = ['1', '2', '3', '4'];
             break;
-        case 'WiFi':
-            values = ['free', 'paid', 'no'];
-            break;
-        case 'Alcohol':
-            values = ['full_bar', 'beer_and_wine', 'none'];
-            break;
-        case 'NoiseLevel':
-            values = ['quiet', 'average', 'loud', 'very_loud'];
-            break;
-        case 'RestaurantsAttire':
-            values = ['casual', 'dressy', 'formal'];
-            break;
+        case 'BusinessParking':
+        case 'BikeParking':
+        case 'HasTV':
         case 'OutdoorSeating':
-            values = ['true', 'false'];
-            break;
         case 'GoodForKids':
+        case 'RestaurantsTakeOut':
+        case 'RestaurantsDelivery':
             values = ['true', 'false'];
             break;
     }
