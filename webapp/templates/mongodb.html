@@ -73,7 +73,107 @@
 
     <!-- MongoDB Businesses -->
     <div class="tab-pane fade" id="mongodb-businesses" role="tabpanel">
-        <div class="card card-dashboard">
+        <!-- Advanced Search Component -->
+        <div class="card card-dashboard mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Document Search</h5>
+                <div class="text-muted small">MongoDB's flexible schema allows for powerful document querying</div>
+            </div>
+            <div class="card-body">
+                <form id="mongodbSearchForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="mongodbSearchQuery" class="form-label">Search Terms:</label>
+                            <input type="text" id="mongodbSearchQuery" class="form-control" placeholder="Search by business name, keywords...">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="mongodbLocationFilter" class="form-label">Location:</label>
+                            <input type="text" id="mongodbLocationFilter" class="form-control" placeholder="City or state...">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="mongodbCategoryFilter" class="form-label">Category:</label>
+                            <select id="mongodbCategoryFilter" class="form-select">
+                                <option value="">Any Category</option>
+                                <option value="Restaurants">Restaurants</option>
+                                <option value="Shopping">Shopping</option>
+                                <option value="Food">Food</option>
+                                <option value="Beauty & Spas">Beauty & Spas</option>
+                                <option value="Home Services">Home Services</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="mongodbRatingFilter" class="form-label">Minimum Rating:</label>
+                            <select id="mongodbRatingFilter" class="form-select">
+                                <option value="">Any Rating</option>
+                                <option value="5">5 Stars</option>
+                                <option value="4">4+ Stars</option>
+                                <option value="3">3+ Stars</option>
+                                <option value="2">2+ Stars</option>
+                                <option value="1">1+ Star</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="mongodbAttributeKey" class="form-label">Attribute Filter:</label>
+                            <select id="mongodbAttributeKey" class="form-select">
+                                <option value="">Any Attribute</option>
+                                <option value="RestaurantsPriceRange2">Price Range</option>
+                                <option value="WiFi">Wi-Fi</option>
+                                <option value="Alcohol">Alcohol</option>
+                                <option value="NoiseLevel">Noise Level</option>
+                                <option value="RestaurantsAttire">Attire</option>
+                                <option value="OutdoorSeating">Outdoor Seating</option>
+                                <option value="GoodForKids">Good For Kids</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="mongodbAttributeValue" class="form-label">Attribute Value:</label>
+                            <select id="mongodbAttributeValue" class="form-select">
+                                <option value="">Any value</option>
+                                <!-- Values will be populated by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="mongodbSortBy" class="form-label">Sort By:</label>
+                            <select id="mongodbSortBy" class="form-select">
+                                <option value="stars">Highest Rated</option>
+                                <option value="review_count">Most Reviewed</option>
+                                <option value="name">Business Name</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="mongodbLimitSelect" class="form-label">Results Limit:</label>
+                            <select id="mongodbLimitSelect" class="form-select">
+                                <option value="10">10 businesses</option>
+                                <option value="25">25 businesses</option>
+                                <option value="50">50 businesses</option>
+                                <option value="100">100 businesses</option>
+                            </select>
+                        </div>
+                        <div class="col-md-9 d-flex align-items-end">
+                            <button id="mongodbSearchButton" type="button" class="btn btn-primary me-2">Search</button>
+                            <button id="mongodbClearButton" type="button" class="btn btn-outline-secondary">Clear</button>
+                        </div>
+                    </div>
+                </form>
+                
+                <div id="mongodbSearchLoader" class="loader d-none"></div>
+                <div id="mongodbSearchResults"></div>
+                <div id="mongodbSearchPagination" class="mt-3 d-none">
+                    <nav>
+                        <ul class="pagination justify-content-center">
+                            <!-- Pagination links will be inserted here -->
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Businesses Table -->
+        <div class="card card-dashboard d-none">
             <div class="card-header">
                 <h5 class="card-title mb-0">Top Businesses</h5>
             </div>
@@ -115,21 +215,123 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <h6>Business Information</h6>
                             <dl class="row">
-                                <dt class="col-sm-4">Location:</dt>
-                                <dd class="col-sm-8" id="mongodbBusinessDetailsLocation"></dd>
-                                <dt class="col-sm-4">Rating:</dt>
-                                <dd class="col-sm-8" id="mongodbBusinessDetailsRating"></dd>
-                                <dt class="col-sm-4">Reviews:</dt>
-                                <dd class="col-sm-8" id="mongodbBusinessDetailsReviews"></dd>
-                                <dt class="col-sm-4">Checkins:</dt>
-                                <dd class="col-sm-8" id="mongodbBusinessDetailsCheckins"></dd>
+                                <dt class="col-sm-2">Location:</dt>
+                                <dd class="col-sm-10" id="mongodbBusinessDetailsLocation"></dd>
+                                <dt class="col-sm-2">Rating:</dt>
+                                <dd class="col-sm-10" id="mongodbBusinessDetailsRating"></dd>
+                                <dt class="col-sm-2">Reviews:</dt>
+                                <dd class="col-sm-10" id="mongodbBusinessDetailsReviews"></dd>
+                                <dt class="col-sm-2">Checkins:</dt>
+                                <dd class="col-sm-10" id="mongodbBusinessDetailsCheckins"></dd>
                             </dl>
                         </div>
-                        <div class="col-md-6">
-                            <canvas id="mongodbBusinessDetailsChart"></canvas>
+                    </div>
+                    
+                    <!-- Business Details Tabs -->
+                    <div class="mt-4">
+                        <ul class="nav nav-tabs" id="businessDetailsTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="mongodb-performance-tab" data-bs-toggle="tab" data-bs-target="#mongodb-performance-content" type="button" role="tab">Performance</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="mongodb-reviews-tab" data-bs-toggle="tab" data-bs-target="#mongodb-reviews-content" type="button" role="tab">Reviews</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="mongodb-checkins-tab" data-bs-toggle="tab" data-bs-target="#mongodb-checkins-content" type="button" role="tab">Checkins Analysis</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="mongodb-attributes-tab" data-bs-toggle="tab" data-bs-target="#mongodb-attributes-content" type="button" role="tab">Document Attributes</button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content mt-3" id="mongodbBusinessDetailsTabContent">
+                            <!-- Performance Tab (with fixed height chart) -->
+                            <div class="tab-pane fade show active" id="mongodb-performance-content" role="tabpanel">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="card-title mb-0">Monthly Activity</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="height: 350px; width: 100%; position: relative;">
+                                            <canvas id="mongodbBusinessDetailsChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Reviews Tab -->
+                            <div class="tab-pane fade" id="mongodb-reviews-content" role="tabpanel">
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h6>Customer Reviews</h6>
+                                        <div>
+                                            <select id="mongodbReviewSortSelect" class="form-select form-select-sm">
+                                                <option value="date_desc">Newest First</option>
+                                                <option value="date_asc">Oldest First</option>
+                                                <option value="stars_desc">Highest Rating</option>
+                                                <option value="stars_asc">Lowest Rating</option>
+                                                <option value="useful_desc">Most Useful</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="mongodbReviewsLoader" class="loader d-none"></div>
+                                <div id="mongodbReviewsList"></div>
+                                <div id="mongodbReviewsPagination" class="mt-3">
+                                    <nav>
+                                        <ul class="pagination justify-content-center">
+                                            <!-- Pagination will be added here -->
+                                        </ul>
+                                    </nav>
+                                </div>
+                            </div>
+                            
+                            <!-- Checkins Tab -->
+                            <div class="tab-pane fade" id="mongodb-checkins-content" role="tabpanel">
+                                <div id="mongodbCheckinsLoader" class="loader d-none"></div>
+                                <div class="mb-2 small text-muted">
+                                    <i class="bi bi-info-circle"></i> Checkins represent when users marked they visited a business in the Yelp app.
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Checkins by Day of Week</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="mongodbCheckinsByDayChart"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Checkins by Hour</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="mongodbHourDistribution"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Attributes Tab (Specific to MongoDB) -->
+                            <div class="tab-pane fade" id="mongodb-attributes-content" role="tabpanel">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="card-title mb-0">Business Attributes</h6>
+                                        <div class="text-muted small">MongoDB's document model allows storing complex, nested attributes</div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="mongodbBusinessAttributes"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -141,27 +343,220 @@
     <div class="tab-pane fade" id="mongodb-analytics" role="tabpanel">
         <div class="card card-dashboard">
             <div class="card-header">
-                <h5 class="card-title mb-0">MongoDB-Specific Analytics</h5>
+                <h5 class="card-title mb-0">MongoDB Document Analytics</h5>
+                <div class="text-muted small">Analytics specifically designed for document databases</div>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header">
-                                <h6 class="card-title mb-0">Document Size Distribution</h6>
+                <!-- Analytics Tabs -->
+                <ul class="nav nav-pills mb-3" id="mongodbAnalyticsTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="mongodb-docs-tab" data-bs-toggle="pill" data-bs-target="#mongodb-docs-content" type="button" role="tab">Document Size</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="mongodb-schema-tab" data-bs-toggle="pill" data-bs-target="#mongodb-schema-content" type="button" role="tab">Schema Analysis</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="mongodb-structure-tab" data-bs-toggle="pill" data-bs-target="#mongodb-structure-content" type="button" role="tab">Document Structure</button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="mongodbAnalyticsTabContent">
+                    <!-- Document Size Tab -->
+                    <div class="tab-pane fade show active" id="mongodb-docs-content" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="card-title mb-0">Document Size Distribution</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="mongodbDocumentSizeChart"></canvas>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="card-body">
-                                <canvas id="mongodbDocumentSizeChart"></canvas>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="card-title mb-0">Business Attributes Analysis</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="mongodbAttributesChart"></canvas>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header">
-                                <h6 class="card-title mb-0">Business Attributes Analysis</h6>
+                    
+                    <!-- Schema Analysis Tab -->
+                    <div class="tab-pane fade" id="mongodb-schema-content" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-12 mb-4">
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i> MongoDB's flexible schema allows documents in the same collection to have different fields, unlike traditional relational databases where all records must conform to a fixed schema.
+                                </div>
                             </div>
-                            <div class="card-body">
-                                <canvas id="mongodbAttributesChart"></canvas>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12 mb-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="card-title mb-0">Schema Statistics by Collection</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="mongodbSchemaStatsChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="card-title mb-0">Array Field Length Distribution</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="mongodbArrayDistributionChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Document Structure Tab -->
+                    <div class="tab-pane fade" id="mongodb-structure-content" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-12 mb-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="card-title mb-0">Document Structure Visualization</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="documentStructureViz"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="card-title mb-0">MongoDB vs Relational Storage</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <h6 class="text-center">MongoDB Document Model</h6>
+                                                <div class="card mb-3">
+                                                    <div class="card-body bg-light">
+                                                        <pre class="mb-0" style="font-size: 12px;">
+{
+  "business_id": "XFHzgHiVdN8e_ioF9Py3UA",
+  "name": "Smokey Joe's BBQ",
+  "stars": 4.5,
+  "review_count": 127,
+  "location": {
+    "address": "123 Main St",
+    "city": "Phoenix",
+    "state": "AZ"
+  },
+  "categories": [
+    "Restaurants", 
+    "BBQ", 
+    "Food"
+  ],
+  "attributes": {
+    "TakeOut": true,
+    "NoiseLevel": "average",
+    "RestaurantsPriceRange2": "2"
+  }
+}
+                                                        </pre>
+                                                    </div>
+                                                </div>
+                                                <div class="text-center text-success mb-3">
+                                                    <i class="bi bi-check-circle"></i> Single document retrieval
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <h6 class="text-center">Relational Model (Tables)</h6>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm table-bordered mb-2">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th colspan="4">businesses</th>
+                                                            </tr>
+                                                            <tr>
+                                                                <th>business_id</th>
+                                                                <th>name</th>
+                                                                <th>stars</th>
+                                                                <th>review_count</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <tr>
+                                                                <td>XFHzgHiVdN8e...</td>
+                                                                <td>Smokey Joe's BBQ</td>
+                                                                <td>4.5</td>
+                                                                <td>127</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                    
+                                                    <table class="table table-sm table-bordered mb-2">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th colspan="4">locations</th>
+                                                            </tr>
+                                                            <tr>
+                                                                <th>business_id</th>
+                                                                <th>address</th>
+                                                                <th>city</th>
+                                                                <th>state</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <tr>
+                                                                <td>XFHzgHiVdN8e...</td>
+                                                                <td>123 Main St</td>
+                                                                <td>Phoenix</td>
+                                                                <td>AZ</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                    
+                                                    <table class="table table-sm table-bordered mb-2">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th colspan="2">business_categories</th>
+                                                            </tr>
+                                                            <tr>
+                                                                <th>business_id</th>
+                                                                <th>category</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <tr>
+                                                                <td>XFHzgHiVdN8e...</td>
+                                                                <td>Restaurants</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td>XFHzgHiVdN8e...</td>
+                                                                <td>BBQ</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td>XFHzgHiVdN8e...</td>
+                                                                <td>Food</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div class="text-center text-danger mb-3">
+                                                    <i class="bi bi-exclamation-circle"></i> Requires multiple JOINs
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
