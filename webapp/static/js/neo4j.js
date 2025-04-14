@@ -388,6 +388,7 @@ async function showNeo4jBusinessDetails(businessId, businessName) {
         document.getElementById('neo4jBusinessDetailsRating').innerHTML = `${formatStarRating(business.stars)} (${business.avg_stars ? parseFloat(business.avg_stars).toFixed(1) : 'N/A'} avg)`;
         document.getElementById('neo4jBusinessDetailsReviews').textContent = formatNumber(business.review_count || 0);
         document.getElementById('neo4jBusinessDetailsCheckins').textContent = formatNumber(business.checkin_count || 0);
+        document.getElementById('neo4jBusinessDetailsId').textContent = businessId;
         
         // Display categories
         if (data.categories && data.categories.length > 0) {
@@ -997,6 +998,7 @@ async function loadBusinessRecommendations(businessId, targetId = 'main') {
 }
 
 // Load Neo4j Network Analysis
+// Fixed loadNeo4jNetwork function
 async function loadNeo4jNetwork() {
     const businessId = document.getElementById('neo4jBusinessIdInput').value.trim();
     
@@ -1005,40 +1007,52 @@ async function loadNeo4jNetwork() {
         return;
     }
     
-    // Show loader
+    // Show loader and hide previous results
     document.getElementById('neo4jNetworkLoader').classList.remove('d-none');
     document.getElementById('neo4jNetworkResults').classList.add('d-none');
+    document.getElementById('neo4jNetworkError').classList.add('d-none');
     
     try {
+        console.log("Fetching network data for business ID:", businessId);
         const response = await fetch(`/api/neo4j/business_network?business_id=${encodeURIComponent(businessId)}`);
-        const data = await response.json();
         
+        // Check if response is ok
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log("Received network data:", data);
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // Get data with proper defaults
         const categoryRelated = data.category_related || [];
         const userRelated = data.user_related || [];
         const sharedCategories = data.shared_categories || [];
         const connectedUsers = data.connected_users || [];
         
         // Create category-related table
-        let categoryTableHtml = `
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Business Name</th>
-                        <th>City</th>
-                        <th>Stars</th>
-                        <th>Common Categories</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+        let categoryTableHtml = '';
         
         if (categoryRelated.length === 0) {
-            categoryTableHtml += `
-                <tr>
-                    <td colspan="4" class="text-center">No businesses found with common categories</td>
-                </tr>
-            `;
+            categoryTableHtml = '<div class="alert alert-info">No businesses found with common categories</div>';
         } else {
+            categoryTableHtml = `
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Business Name</th>
+                            <th>Location</th>
+                            <th>Rating</th>
+                            <th>Common Categories</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
             categoryRelated.forEach(business => {
                 const escapedName = business.business_name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 
@@ -1051,34 +1065,32 @@ async function loadNeo4jNetwork() {
                     </tr>
                 `;
             });
+            
+            categoryTableHtml += `
+                    </tbody>
+                </table>
+            `;
         }
         
-        categoryTableHtml += `
-                </tbody>
-            </table>
-        `;
-        
         // Create user-related table
-        let userTableHtml = `
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Business Name</th>
-                        <th>City</th>
-                        <th>Stars</th>
-                        <th>Common Users</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+        let userTableHtml = '';
         
         if (userRelated.length === 0) {
-            userTableHtml += `
-                <tr>
-                    <td colspan="4" class="text-center">No businesses found with common users</td>
-                </tr>
-            `;
+            userTableHtml = '<div class="alert alert-info">No businesses found with common users</div>';
         } else {
+            userTableHtml = `
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Business Name</th>
+                            <th>Location</th>
+                            <th>Rating</th>
+                            <th>Common Users</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
             userRelated.forEach(business => {
                 const escapedName = business.business_name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 
@@ -1091,32 +1103,30 @@ async function loadNeo4jNetwork() {
                     </tr>
                 `;
             });
+            
+            userTableHtml += `
+                    </tbody>
+                </table>
+            `;
         }
         
-        userTableHtml += `
-                </tbody>
-            </table>
-        `;
-        
         // Create shared categories table
-        let sharedCategoriesHtml = `
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Category</th>
-                        <th>Business Count</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+        let sharedCategoriesHtml = '';
         
         if (sharedCategories.length === 0) {
-            sharedCategoriesHtml += `
-                <tr>
-                    <td colspan="2" class="text-center">No shared categories data available</td>
-                </tr>
-            `;
+            sharedCategoriesHtml = '<div class="alert alert-info">No shared categories data available</div>';
         } else {
+            sharedCategoriesHtml = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Business Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
             sharedCategories.forEach(category => {
                 sharedCategoriesHtml += `
                     <tr>
@@ -1125,32 +1135,30 @@ async function loadNeo4jNetwork() {
                     </tr>
                 `;
             });
+            
+            sharedCategoriesHtml += `
+                    </tbody>
+                </table>
+            `;
         }
         
-        sharedCategoriesHtml += `
-                </tbody>
-            </table>
-        `;
-        
         // Create connected users table
-        let connectedUsersHtml = `
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>User Name</th>
-                        <th>Businesses Count</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+        let connectedUsersHtml = '';
         
         if (connectedUsers.length === 0) {
-            connectedUsersHtml += `
-                <tr>
-                    <td colspan="2" class="text-center">No connected users data available</td>
-                </tr>
-            `;
+            connectedUsersHtml = '<div class="alert alert-info">No connected users data available</div>';
         } else {
+            connectedUsersHtml = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>User Name</th>
+                            <th>Businesses Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
             connectedUsers.forEach(user => {
                 connectedUsersHtml += `
                     <tr>
@@ -1159,29 +1167,42 @@ async function loadNeo4jNetwork() {
                     </tr>
                 `;
             });
+            
+            connectedUsersHtml += `
+                    </tbody>
+                </table>
+            `;
         }
         
-        connectedUsersHtml += `
-                </tbody>
-            </table>
-        `;
-        
-        // Update the DOM
-        document.getElementById('neo4jCategoryRelatedTable').innerHTML = categoryTableHtml;
-        document.getElementById('neo4jUserRelatedTable').innerHTML = userTableHtml;
-        document.getElementById('neo4jSharedCategoriesTable').innerHTML = sharedCategoriesHtml;
-        document.getElementById('neo4jConnectedUsersTable').innerHTML = connectedUsersHtml;
+        // Update the DOM - Note the different IDs for the network tab
+        document.getElementById('neo4jNetworkCategoryRelatedTable').innerHTML = categoryTableHtml;
+        document.getElementById('neo4jNetworkUserRelatedTable').innerHTML = userTableHtml;
+        document.getElementById('neo4jNetworkSharedCategoriesTable').innerHTML = sharedCategoriesHtml;
+        document.getElementById('neo4jNetworkConnectedUsersTable').innerHTML = connectedUsersHtml;
         document.getElementById('neo4jNetworkResults').classList.remove('d-none');
     } catch (error) {
         console.error('Error loading network analysis:', error);
-        alert('Error loading network analysis. Please check the business ID and try again.');
+        document.getElementById('neo4jNetworkError').innerHTML = `
+            <div class="alert alert-danger">
+                <h5>Error loading network analysis</h5>
+                <p>${error.message}</p>
+                <p>Please check that the business ID is valid. You can find business IDs in the business details section when searching for businesses.</p>
+                <h6 class="mt-3">Try these sample business IDs:</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-sm btn-outline-secondary sample-id" onclick="document.getElementById('neo4jBusinessIdInput').value='4JNXUYY8wbaaDmk3BPzlWw'">4JNXUYY8wbaaDmk3BPzlWw</button>
+                    <button class="btn btn-sm btn-outline-secondary sample-id" onclick="document.getElementById('neo4jBusinessIdInput').value='RESDUcs7fIiihp38-d6_6g'">RESDUcs7fIiihp38-d6_6g</button>
+                    <button class="btn btn-sm btn-outline-secondary sample-id" onclick="document.getElementById('neo4jBusinessIdInput').value='K7lWdNUhCbcnEvI0NhGewg'">K7lWdNUhCbcnEvI0NhGewg</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('neo4jNetworkError').classList.remove('d-none');
     } finally {
         // Hide loader
         document.getElementById('neo4jNetworkLoader').classList.add('d-none');
     }
 }
 
-// Find paths between businesses
+// Fixed findBusinessPaths function
 async function findBusinessPaths() {
     const businessId1 = document.getElementById('neo4jBusinessId1').value.trim();
     const businessId2 = document.getElementById('neo4jBusinessId2').value.trim();
@@ -1197,13 +1218,26 @@ async function findBusinessPaths() {
         return;
     }
     
-    // Show loader
+    // Show loader and hide results/errors
     document.getElementById('pathFinderLoader').classList.remove('d-none');
     document.getElementById('pathFinderResults').classList.add('d-none');
+    document.getElementById('pathFinderError').classList.add('d-none');
     
     try {
+        console.log(`Finding ${pathType} paths between ${businessId1} and ${businessId2}`);
         const response = await fetch(`/api/neo4j/connection_path?business_id1=${encodeURIComponent(businessId1)}&business_id2=${encodeURIComponent(businessId2)}&path_type=${pathType}`);
+        
+        // Check if response is ok
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log("Received path data:", data);
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
         
         // Display summary
         const summaryContainer = document.getElementById('pathFinderSummary');
@@ -1214,7 +1248,7 @@ async function findBusinessPaths() {
         // Display paths
         const pathsContainer = document.getElementById('pathFinderTable');
         
-        if (data.paths.length === 0) {
+        if (!data.paths || data.paths.length === 0) {
             pathsContainer.innerHTML = '<div class="alert alert-info">No paths found between these businesses.</div>';
         } else {
             let pathsHtml = '';
@@ -1233,7 +1267,7 @@ async function findBusinessPaths() {
                 
                 data.paths.forEach(path => {
                     pathsHtml += `
-                    <tr>
+                        <tr>
                             <td>User connection</td>
                             <td>${path.connection}</td>
                         </tr>
@@ -1278,8 +1312,111 @@ async function findBusinessPaths() {
         document.getElementById('pathFinderResults').classList.remove('d-none');
     } catch (error) {
         console.error('Error finding paths:', error);
+        document.getElementById('pathFinderError').innerHTML = `
+            <div class="alert alert-danger">
+                <h5>Error finding paths</h5>
+                <p>${error.message}</p>
+                <p>Please check that both business IDs are valid. You can find business IDs in the business details section when searching for businesses.</p>
+                <h6 class="mt-3">Try these sample business ID pairs:</h6>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button class="btn btn-sm btn-outline-secondary" 
+                            onclick="document.getElementById('neo4jBusinessId1').value='4JNXUYY8wbaaDmk3BPzlWw';
+                                     document.getElementById('neo4jBusinessId2').value='RESDUcs7fIiihp38-d6_6g';">
+                        Sample Pair 1
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" 
+                            onclick="document.getElementById('neo4jBusinessId1').value='K7lWdNUhCbcnEvI0NhGewg';
+                                     document.getElementById('neo4jBusinessId2').value='RESDUcs7fIiihp38-d6_6g';">
+                        Sample Pair 2
+                    </button>
+                </div>
+            </div>
+        `;
+        document.getElementById('pathFinderError').classList.remove('d-none');
+    } finally {
+        // Hide loader
+        document.getElementById('pathFinderLoader').classList.add('d-none');
+    }
+}
+
+// Find paths between businesses
+async function findBusinessPaths() {
+    const businessId1 = document.getElementById('neo4jBusinessId1').value.trim();
+    const businessId2 = document.getElementById('neo4jBusinessId2').value.trim();
+    const pathType = document.querySelector('input[name="pathType"]:checked').value;
+    
+    if (!businessId1 || !businessId2) {
+        alert('Please enter both business IDs');
+        return;
+    }
+    
+    if (businessId1 === businessId2) {
+        alert('Please enter different business IDs');
+        return;
+    }
+    
+    // Show loader and hide results/errors
+    document.getElementById('pathFinderLoader').classList.remove('d-none');
+    document.getElementById('pathFinderResults').classList.add('d-none');
+    document.getElementById('pathFinderError').classList.add('d-none');
+    
+    try {
+        console.log(`Finding ${pathType} paths between ${businessId1} and ${businessId2}`);
+        const response = await fetch(`/api/neo4j/connection_path?business_id1=${encodeURIComponent(businessId1)}&business_id2=${encodeURIComponent(businessId2)}&path_type=${pathType}`);
+        
+        // Check if response is ok
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log("Received path data:", data);
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // Display summary
+        const summaryContainer = document.getElementById('pathFinderSummary');
+        summaryContainer.innerHTML = `
+            <p>Paths between <strong>${data.business1.name}</strong> and <strong>${data.business2.name}</strong></p>
+        `;
+        
+        // Display paths
+        const pathsContainer = document.getElementById('pathFinderTable');
+        
+        if (data.paths.length === 0) {
+            pathsContainer.innerHTML = '<div class="alert alert-info">No paths found between these businesses.</div>';
+        } else {
+            // Existing code to show paths
+            // ...
+        }
+        
+        // Show results
         document.getElementById('pathFinderResults').classList.remove('d-none');
-        document.getElementById('pathFinderTable').innerHTML = '<div class="alert alert-danger">Error finding paths. Please try again.</div>';
+    } catch (error) {
+        console.error('Error finding paths:', error);
+        document.getElementById('pathFinderError').innerHTML = `
+            <div class="alert alert-danger">
+                <h5>Error finding paths</h5>
+                <p>${error.message}</p>
+                <p>Please check that both business IDs are valid. You can find business IDs in the business details section when searching for businesses.</p>
+                <h6 class="mt-3">Try these sample business ID pairs:</h6>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button class="btn btn-sm btn-outline-secondary" 
+                            onclick="document.getElementById('neo4jBusinessId1').value='4JNXUYY8wbaaDmk3BPzlWw';
+                                     document.getElementById('neo4jBusinessId2').value='RESDUcs7fIiihp38-d6_6g';">
+                        Sample Pair 1
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" 
+                            onclick="document.getElementById('neo4jBusinessId1').value='K7lWdNUhCbcnEvI0NhGewg';
+                                     document.getElementById('neo4jBusinessId2').value='RESDUcs7fIiihp38-d6_6g';">
+                        Sample Pair 2
+                    </button>
+                </div>
+            </div>
+        `;
+        document.getElementById('pathFinderError').classList.remove('d-none');
     } finally {
         // Hide loader
         document.getElementById('pathFinderLoader').classList.add('d-none');
@@ -1621,11 +1758,97 @@ async function loadGraphAnalytics() {
     }
 }
 
+async function searchBusinessForId(searchQuery, limit = 5) {
+    try {
+        // Build query parameters for a simple search
+        const params = new URLSearchParams();
+        if (searchQuery) params.append('name', searchQuery);
+        params.append('limit', limit);
+        
+        const response = await fetch(`/api/neo4j/search_businesses?${params.toString()}`);
+        const data = await response.json();
+        
+        // Extract businesses from the response
+        const businesses = data.businesses || [];
+        
+        return businesses.map(b => ({
+            id: b.business_id,
+            name: b.business_name || 'Unnamed Business',
+            location: `${b.city || 'N/A'}, ${b.state || 'N/A'}`,
+            stars: b.stars
+        }));
+    } catch (error) {
+        console.error('Error searching businesses for ID:', error);
+        return [];
+    }
+}
+
+async function showBusinessIdFinder(targetInputId) {
+    const searchQuery = prompt("Enter business name to search");
+    if (!searchQuery) return;
+    
+    try {
+        const businesses = await searchBusinessForId(searchQuery);
+        
+        if (businesses.length === 0) {
+            alert("No businesses found matching that name");
+            return;
+        }
+        
+        // Create a simple selection dialog
+        let html = '<div class="list-group">';
+        businesses.forEach(b => {
+            html += `
+                <button type="button" class="list-group-item list-group-item-action" 
+                  onclick="document.getElementById('${targetInputId}').value='${b.id}'; this.closest('.modal').remove()">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">${b.name}</h5>
+                        <small>${formatStarRating(b.stars)}</small>
+                    </div>
+                    <p class="mb-1">${b.location}</p>
+                    <small class="text-muted">ID: ${b.id}</small>
+                </button>
+            `;
+        });
+        html += '</div>';
+        
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'modal fade show';
+        modal.style.display = 'block';
+        modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        modal.tabIndex = -1;
+        
+        modal.innerHTML = `
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Select a Business</h5>
+                        <button type="button" class="btn-close" onclick="this.closest('.modal').remove()"></button>
+                    </div>
+                    <div class="modal-body">
+                        ${html}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+    } catch (error) {
+        console.error('Error showing business finder:', error);
+        alert('Error searching for businesses');
+    }
+}
+
 // Initialize Neo4j event listeners
 function initializeNeo4jEventListeners() {
     // Overview tab
     document.getElementById('neo4j-overview-tab').addEventListener('shown.bs.tab', function (e) {
         loadNeo4jOverviewStats();
+    });
+
+    document.getElementById('neo4j-analytics-tab')?.addEventListener('shown.bs.tab', function (e) {
+        loadGraphAnalytics();
     });
     
     // Business search

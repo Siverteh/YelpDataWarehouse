@@ -221,6 +221,10 @@
                         <div class="col-md-12">
                             <h6>Business Information</h6>
                             <dl class="row">
+                                <!-- Add this new line for business ID -->
+                                <dt class="col-sm-2">Business ID:</dt>
+                                <dd class="col-sm-10" id="neo4jBusinessDetailsId"></dd>
+                                
                                 <dt class="col-sm-2">Location:</dt>
                                 <dd class="col-sm-10" id="neo4jBusinessDetailsLocation"></dd>
                                 <dt class="col-sm-2">Rating:</dt>
@@ -389,22 +393,33 @@
         </div>
     </div>
 
-    <!-- Neo4j Network Analysis -->
+    <!-- Neo4j Network Analysis - Properly placed inside its tab pane -->
     <div class="tab-pane fade" id="neo4j-network" role="tabpanel">
+        <!-- Business Network Analysis -->
         <div class="card card-dashboard">
             <div class="card-header">
                 <h5 class="card-title mb-0">Business Network Analysis</h5>
             </div>
             <div class="card-body">
                 <div class="row mb-3">
-                    <div class="col-md-9">
+                    <div class="col-md-7">
                         <label for="neo4jBusinessIdInput" class="form-label">Enter Business ID:</label>
                         <input type="text" id="neo4jBusinessIdInput" class="form-control" placeholder="Enter business ID for network analysis">
+                    </div>
+                    <div class="col-md-2">
+                        <!-- Add button to find business ID -->
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-outline-secondary w-100" onclick="showBusinessIdFinder('neo4jBusinessIdInput')">
+                            <i class="bi bi-search"></i> Find ID
+                        </button>
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
                         <button id="loadNeo4jNetwork" class="btn btn-primary w-100">Analyze Network</button>
                     </div>
                 </div>
+                
+                <!-- Add error display container -->
+                <div id="neo4jNetworkError" class="d-none"></div>
                 
                 <div id="neo4jNetworkLoader" class="loader d-none"></div>
                 <div id="neo4jNetworkResults" class="d-none">
@@ -415,7 +430,7 @@
                                     <h6 class="card-title mb-0">Related by Category</h6>
                                 </div>
                                 <div class="card-body">
-                                    <div id="neo4jCategoryRelatedTable"></div>
+                                    <div id="neo4jNetworkCategoryRelatedTable"></div>
                                 </div>
                             </div>
                         </div>
@@ -425,7 +440,7 @@
                                     <h6 class="card-title mb-0">Related by User Reviews</h6>
                                 </div>
                                 <div class="card-body">
-                                    <div id="neo4jUserRelatedTable"></div>
+                                    <div id="neo4jNetworkUserRelatedTable"></div>
                                 </div>
                             </div>
                         </div>
@@ -437,7 +452,7 @@
                                     <h6 class="card-title mb-0">Shared Categories</h6>
                                 </div>
                                 <div class="card-body">
-                                    <div id="neo4jSharedCategoriesTable"></div>
+                                    <div id="neo4jNetworkSharedCategoriesTable"></div>
                                 </div>
                             </div>
                         </div>
@@ -447,7 +462,7 @@
                                     <h6 class="card-title mb-0">Most Connected Users</h6>
                                 </div>
                                 <div class="card-body">
-                                    <div id="neo4jConnectedUsersTable"></div>
+                                    <div id="neo4jNetworkConnectedUsersTable"></div>
                                 </div>
                             </div>
                         </div>
@@ -463,13 +478,27 @@
             </div>
             <div class="card-body">
                 <div class="row mb-3">
-                    <div class="col-md-5">
+                    <div class="col-md-4">
                         <label for="neo4jBusinessId1" class="form-label">Starting Business ID:</label>
                         <input type="text" id="neo4jBusinessId1" class="form-control" placeholder="Business ID 1">
                     </div>
-                    <div class="col-md-5">
+                    <div class="col-md-1">
+                        <!-- Add button to find business ID -->
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-outline-secondary w-100" onclick="showBusinessIdFinder('neo4jBusinessId1')">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                    <div class="col-md-4">
                         <label for="neo4jBusinessId2" class="form-label">Ending Business ID:</label>
                         <input type="text" id="neo4jBusinessId2" class="form-control" placeholder="Business ID 2">
+                    </div>
+                    <div class="col-md-1">
+                        <!-- Add button to find business ID -->
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-outline-secondary w-100" onclick="showBusinessIdFinder('neo4jBusinessId2')">
+                            <i class="bi bi-search"></i>
+                        </button>
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
                         <button id="findPathButton" class="btn btn-primary w-100">Find Paths</button>
@@ -488,6 +517,9 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Add error display container -->
+                <div id="pathFinderError" class="d-none"></div>
                 
                 <div id="pathFinderLoader" class="loader d-none"></div>
                 <div id="pathFinderResults" class="d-none">
@@ -524,9 +556,15 @@
             </div>
             <div class="card-body">
                 <div class="row mb-3">
-                    <div class="col-md-9">
+                    <div class="col-md-7">
                         <label for="neo4jRecommendBusinessId" class="form-label">Enter Business ID:</label>
                         <input type="text" id="neo4jRecommendBusinessId" class="form-control" placeholder="Enter business ID to get recommendations">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-outline-secondary w-100" onclick="showBusinessIdFinder('neo4jRecommendBusinessId')">
+                            <i class="bi bi-search"></i> Find ID
+                        </button>
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
                         <button id="loadBusinessRecommendations" class="btn btn-primary w-100">Get Recommendations</button>
@@ -637,12 +675,6 @@
                 <h5 class="card-title mb-0">Graph Analytics Dashboard</h5>
             </div>
             <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-md-12 d-flex justify-content-end">
-                        <button id="loadGraphAnalytics" class="btn btn-primary">Load Graph Analytics</button>
-                    </div>
-                </div>
-                
                 <div id="graphAnalyticsLoader" class="loader d-none"></div>
                 <div id="graphAnalyticsResults" class="d-none">
                     <div class="row mb-4">
