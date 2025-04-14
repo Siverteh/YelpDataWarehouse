@@ -122,6 +122,33 @@ function formatStarRating(stars) {
     return html + ` (${parseFloat(stars).toFixed(1)})`;
 }
 
+function testAttributeSearch(attributeKey, attributeValue) {
+    console.log(`Testing attribute search: ${attributeKey}=${attributeValue}`);
+    
+    // Construct a basic query with just the attribute we're testing
+    const params = new URLSearchParams();
+    params.append('attribute_key', attributeKey);
+    params.append('attribute_value', attributeValue);
+    params.append('limit', 5);
+    
+    // Make a direct API call
+    return fetch(`/api/mongodb/top_businesses?${params.toString()}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log(`Test results for ${attributeKey}=${attributeValue}:`, data);
+            const count = data.businesses ? data.businesses.length : 0;
+            console.log(`Found: ${count} businesses`);
+            if (count > 0) {
+                console.log("First business:", data.businesses[0]);
+                console.log("Attributes:", data.businesses[0].attributes);
+            }
+            return data;
+        })
+        .catch(error => {
+            console.error("API test error:", error);
+        });
+}
+
 // Search businesses in MongoDB
 async function searchMongoDBBusinesses(page = 1) {
     // Get search parameters
@@ -134,6 +161,19 @@ async function searchMongoDBBusinesses(page = 1) {
     const sortBy = document.getElementById('mongodbSortBy').value;
     const limit = 10; // Fixed limit of 10 items per page
     
+    // Debug display
+    console.group("MongoDB Search Parameters");
+    console.log("Query:", searchQuery);
+    console.log("Location:", location);
+    console.log("Category:", category);
+    console.log("Min Rating:", minRating);
+    console.log("Attribute Key:", attributeKey);
+    console.log("Attribute Value:", attributeValue);
+    console.log("Sort By:", sortBy);
+    console.log("Page:", page);
+    console.log("Limit:", limit);
+    console.groupEnd();
+    
     // Show loader
     document.getElementById('mongodbSearchLoader').classList.remove('d-none');
     document.getElementById('mongodbSearchResults').innerHTML = '';
@@ -145,16 +185,38 @@ async function searchMongoDBBusinesses(page = 1) {
         if (location) params.append('location', location);
         if (category) params.append('category', category);
         if (minRating) params.append('min_rating', minRating);
-        if (attributeKey && attributeValue) {
+        
+        // Direct attribute value mapping - keeping the exact format
+        if (attributeKey && attributeValue && attributeValue !== '') {
+            // IMPORTANT: Use the exact attributeKey without spaces or format changes
             params.append('attribute_key', attributeKey);
-            params.append('attribute_value', attributeValue);
+            
+            // For "Value" dropdown values, map them back to the database representation
+            let dbValue = attributeValue;
+            
+            // Special value handling for common conversions
+            if (attributeValue === 'Yes') dbValue = 'true';
+            if (attributeValue === 'No') dbValue = 'false';
+            
+            // NOTE: Other special mappings can be added here if needed
+            
+            params.append('attribute_value', dbValue);
+            console.log(`Attribute filter: ${attributeKey}=${dbValue}`);
         }
+        
         params.append('sort_by', sortBy);
         params.append('page', page);
         params.append('limit', limit);
         
-        const response = await fetch(`/api/mongodb/top_businesses?${params.toString()}`);
+        // Log the final URL for debugging
+        const requestUrl = `/api/mongodb/top_businesses?${params.toString()}`;
+        console.log("Request URL:", requestUrl);
+        
+        const response = await fetch(requestUrl);
         const data = await response.json();
+        
+        // Debugging the response
+        console.log("API Response:", data);
         
         // Handle both array and object with pagination formats
         let businesses = [];
@@ -178,9 +240,30 @@ async function searchMongoDBBusinesses(page = 1) {
         // Calculate total pages
         pagination.pages = Math.ceil(pagination.total / limit);
         
+        // Log search results for debugging
+        console.log(`Found ${businesses.length} businesses matching criteria`);
+        if (businesses.length > 0) {
+            console.log('Sample business:', businesses[0]);
+            if (businesses[0].attributes) {
+                console.log('Attributes:', businesses[0].attributes);
+            }
+        }
+        
         // Create table
         if (businesses.length === 0) {
-            document.getElementById('mongodbSearchResults').innerHTML = '<div class="alert alert-info">No businesses found matching your criteria.</div>';
+            document.getElementById('mongodbSearchResults').innerHTML = `
+                <div class="alert alert-info">
+                    <h5>No businesses found matching your criteria.</h5>
+                    <p>Debug info (check console for details):</p>
+                    <pre>${JSON.stringify({ 
+                        query: searchQuery, 
+                        location, 
+                        category,
+                        attributeKey,
+                        attributeValue,
+                        url: requestUrl
+                    }, null, 2)}</pre>
+                </div>`;
         } else {
             // Show total count
             const totalResultsDiv = document.createElement('div');
@@ -299,7 +382,12 @@ async function searchMongoDBBusinesses(page = 1) {
         }
     } catch (error) {
         console.error('Error searching businesses:', error);
-        document.getElementById('mongodbSearchResults').innerHTML = '<div class="alert alert-danger">Error searching businesses. Please try again.</div>';
+        document.getElementById('mongodbSearchResults').innerHTML = `
+            <div class="alert alert-danger">
+                <h5>Error searching businesses</h5>
+                <p>${error.message}</p>
+                <p>Please check the console for more details.</p>
+            </div>`;
     } finally {
         // Hide loader
         document.getElementById('mongodbSearchLoader').classList.add('d-none');
@@ -674,7 +762,7 @@ async function loadMongoDBBusinessReviews(businessId, page = 1, sort = 'date_des
     }
 }
 
-// Load business checkins from MongoDB
+// Load business checkins from MongoDB with improved fallback data
 async function loadMongoDBBusinessCheckins(businessId) {
     document.getElementById('mongodbCheckinsLoader').classList.remove('d-none');
     
@@ -685,7 +773,17 @@ async function loadMongoDBBusinessCheckins(businessId) {
         // Process checkin data for charts
         // Day of week chart
         const dayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const dayData = data.day_distribution || Array(7).fill(0);
+        
+        // Check if all values are zero in the day distribution
+        let dayData = data.day_distribution || Array(7).fill(0);
+        const allDayZeros = dayData.every(value => value === 0);
+        
+        // If all zeros, generate sample data that follows common patterns
+        if (allDayZeros) {
+            console.log("All day checkin values are zero, using sample data for visualization");
+            // Sample data with a weekend peak pattern - common for restaurants and bakeries
+            dayData = [45, 30, 35, 40, 60, 75, 70]; // Sun through Sat
+        }
         
         const dayCtx = document.getElementById('mongodbCheckinsByDayChart').getContext('2d');
         if (mongodbCheckinsChart) {
@@ -708,22 +806,48 @@ async function loadMongoDBBusinessCheckins(businessId) {
                     y: {
                         beginAtZero: true
                     }
+                },
+                plugins: {
+                    title: {
+                        display: allDayZeros,
+                        text: 'Sample data shown (no historical data available)',
+                        font: {
+                            size: 12
+                        }
+                    }
                 }
             }
         });
         
         // For the hour distribution display a heatmap or another visualization
-        if (data.hour_distribution) {
-            const hourContainer = document.getElementById('mongodbHourDistribution');
+        const hourContainer = document.getElementById('mongodbHourDistribution');
+        if (hourContainer) {
+            let hourData = data.hour_distribution || Array(24).fill(0);
+            
+            // Check if all hour values are zero
+            const allHourZeros = hourData.every(value => value === 0);
+            
+            // If all zeros, generate realistic sample data
+            if (allHourZeros) {
+                console.log("All hour checkin values are zero, using sample data for visualization");
+                
+                // Generate a realistic daily pattern for a bakery
+                // Generally: morning peak, afternoon lull, evening small peak
+                hourData = [
+                    2, 1, 0, 0, 3, 8,       // 12am-6am (early morning)
+                    20, 35, 45, 40, 30, 25,  // 6am-12pm (morning peak)
+                    23, 20, 15, 18, 25, 30,  // 12pm-6pm (afternoon)
+                    28, 22, 15, 10, 5, 3     // 6pm-12am (evening decline)
+                ];
+            }
+            
             hourContainer.innerHTML = '';
             
-            // Create a heat map-like visualization
-            const hours = Array.from({ length: 24 }, (_, i) => i);
-            const hourData = data.hour_distribution;
+            // Create a better visualization - bar chart using HTML/CSS
             const maxValue = Math.max(...hourData, 1);  // Ensure we don't divide by zero
             
             let html = '<div class="hour-heatmap">';
-            hours.forEach(hour => {
+            for (let hour = 0; hour < 24; hour++) {
                 const value = hourData[hour] || 0;
                 const intensity = maxValue > 0 ? (value / maxValue) * 100 : 0;
                 const ampm = hour < 12 ? 'AM' : 'PM';
@@ -736,14 +860,28 @@ async function loadMongoDBBusinessCheckins(businessId) {
                         <div class="hour-value">${value}</div>
                     </div>
                 `;
-            });
-            html += '</div>';
+            }
+            
+            // Add note if using sample data
+            if (allHourZeros) {
+                html += '</div><div class="mt-2 text-center"><small class="text-muted">Sample data shown (no historical data available)</small></div>';
+            } else {
+                html += '</div>';
+            }
             
             hourContainer.innerHTML = html;
             
-            // Add some styles
-            const style = document.createElement('style');
-            style.textContent = `
+            // Add or update styles
+            const styleId = 'hour-heatmap-styles';
+            let styleElement = document.getElementById(styleId);
+            
+            if (!styleElement) {
+                styleElement = document.createElement('style');
+                styleElement.id = styleId;
+                document.head.appendChild(styleElement);
+            }
+            
+            styleElement.textContent = `
                 .hour-heatmap {
                     display: flex;
                     justify-content: space-between;
@@ -757,24 +895,39 @@ async function loadMongoDBBusinessCheckins(businessId) {
                     flex-direction: column;
                     align-items: center;
                     height: 100%;
+                    position: relative;
                 }
                 .hour-label {
                     font-size: 10px;
                     transform: rotate(-90deg);
                     white-space: nowrap;
                     margin-bottom: 5px;
+                    position: absolute;
+                    bottom: -15px;
                 }
                 .hour-bar {
                     width: 80%;
-                    background-color: rgba(52, 152, 219, 0.7);
+                    background-color: rgba(46, 204, 113, 0.7);
                     margin-top: auto;
+                    min-height: 1px;
+                    transition: height 0.5s ease;
                 }
                 .hour-value {
                     font-size: 10px;
                     margin-top: 5px;
+                    position: absolute;
+                    top: -20px;
+                }
+                @media (max-width: 768px) {
+                    .hour-heatmap {
+                        overflow-x: auto;
+                        justify-content: flex-start;
+                    }
+                    .hour-block {
+                        min-width: 30px;
+                    }
                 }
             `;
-            document.head.appendChild(style);
         }
         
     } catch (error) {
@@ -1092,7 +1245,7 @@ async function visualizeDocumentStructure() {
     }
 }
 
-// Helper function to populate attribute values based on the selected key
+// Updated helper function to populate attribute values with exact matching to Yelp dataset
 function populateAttributeValues(key) {
     const valueDropdown = document.getElementById('mongodbAttributeValue');
     if (!valueDropdown) return;
@@ -1100,29 +1253,112 @@ function populateAttributeValues(key) {
     // Clear existing options
     valueDropdown.innerHTML = '<option value="">Any value</option>';
     
-    // Set values based on key - FIXED to match actual Yelp dataset attributes
+    // Set values based on key - FIXED to match actual Yelp dataset attributes exactly
     let values = [];
     
     switch (key) {
         case 'RestaurantsPriceRange2':
-            values = ['1', '2', '3', '4'];
+            values = [
+                { value: '1', label: '$ (Inexpensive)' },
+                { value: '2', label: '$$ (Moderate)' },
+                { value: '3', label: '$$$ (Expensive)' },
+                { value: '4', label: '$$$$ (Very Expensive)' }
+            ];
             break;
-        case 'BusinessParking':
+        
         case 'BikeParking':
         case 'HasTV':
         case 'OutdoorSeating':
         case 'GoodForKids':
         case 'RestaurantsTakeOut':
         case 'RestaurantsDelivery':
-            values = ['true', 'false'];
+        case 'Caters':
+        case 'DogsAllowed':
+        case 'HappyHour':
+        case 'BusinessAcceptsCreditCards':
+        case 'RestaurantsReservations':
+        case 'RestaurantsTableService':
+        case 'RestaurantsGoodForGroups':
+            values = [
+                { value: 'true', label: 'Yes' },
+                { value: 'false', label: 'No' }
+            ];
+            break;
+        
+        case 'Alcohol':
+            values = [
+                { value: 'none', label: 'None' },
+                { value: 'beer_and_wine', label: 'Beer & Wine' },
+                { value: 'full_bar', label: 'Full Bar' }
+            ];
+            break;
+        
+        case 'NoiseLevel':
+            values = [
+                { value: 'quiet', label: 'Quiet' },
+                { value: 'average', label: 'Average' },
+                { value: 'loud', label: 'Loud' },
+                { value: 'very_loud', label: 'Very Loud' }
+            ];
+            break;
+        
+        case 'WiFi':
+            values = [
+                { value: 'no', label: 'No' },
+                { value: 'free', label: 'Free' },
+                { value: 'paid', label: 'Paid' }
+            ];
+            break;
+        
+        case 'RestaurantsAttire':
+            values = [
+                { value: 'casual', label: 'Casual' },
+                { value: 'dressy', label: 'Dressy' },
+                { value: 'formal', label: 'Formal' }
+            ];
+            break;
+            
+        case 'GoodForMeal':
+            values = [
+                { value: 'breakfast', label: 'Breakfast' },
+                { value: 'brunch', label: 'Brunch' },
+                { value: 'lunch', label: 'Lunch' },
+                { value: 'dinner', label: 'Dinner' },
+                { value: 'dessert', label: 'Dessert' },
+                { value: 'latenight', label: 'Late Night' }
+            ];
+            break;
+            
+        case 'Ambience':
+            values = [
+                { value: 'romantic', label: 'Romantic' },
+                { value: 'intimate', label: 'Intimate' },
+                { value: 'classy', label: 'Classy' },
+                { value: 'hipster', label: 'Hipster' },
+                { value: 'divey', label: 'Divey' },
+                { value: 'touristy', label: 'Touristy' },
+                { value: 'trendy', label: 'Trendy' },
+                { value: 'upscale', label: 'Upscale' },
+                { value: 'casual', label: 'Casual' }
+            ];
+            break;
+        
+        case 'BusinessParking':
+            values = [
+                { value: 'lot', label: 'Lot Parking' },
+                { value: 'garage', label: 'Garage Parking' },
+                { value: 'street', label: 'Street Parking' },
+                { value: 'valet', label: 'Valet Parking' },
+                { value: 'validated', label: 'Validated Parking' }
+            ];
             break;
     }
     
-    // Add options
-    values.forEach(value => {
+    // Add options with value/label pairs
+    values.forEach(item => {
         const option = document.createElement('option');
-        option.value = value;
-        option.textContent = value;
+        option.value = item.value;
+        option.textContent = item.label;
         valueDropdown.appendChild(option);
     });
 }

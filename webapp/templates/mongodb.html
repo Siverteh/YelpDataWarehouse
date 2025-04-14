@@ -73,7 +73,7 @@
 
     <!-- MongoDB Businesses -->
     <div class="tab-pane fade" id="mongodb-businesses" role="tabpanel">
-        <!-- Advanced Search Component -->
+        <!-- Advanced Search Component with Enhanced Filters -->
         <div class="card card-dashboard mb-4">
             <div class="card-header">
                 <h5 class="card-title mb-0">Business Search</h5>
@@ -94,13 +94,28 @@
                             <select id="mongodbCategoryFilter" class="form-select">
                                 <option value="">Any Category</option>
                                 <option value="Restaurants">Restaurants</option>
+                                <option value="Bakeries">Bakeries</option>
                                 <option value="Shopping">Shopping</option>
                                 <option value="Food">Food</option>
                                 <option value="Nightlife">Nightlife</option>
+                                <option value="Coffee & Tea">Coffee & Tea</option>
                                 <option value="Bars">Bars</option>
                                 <option value="Fast Food">Fast Food</option>
-                                <option value="Coffee & Tea">Coffee & Tea</option>
                                 <option value="Pizza">Pizza</option>
+                                <option value="Breakfast & Brunch">Breakfast & Brunch</option>
+                                <option value="American (Traditional)">American (Traditional)</option>
+                                <option value="American (New)">American (New)</option>
+                                <option value="Chinese">Chinese</option>
+                                <option value="Italian">Italian</option>
+                                <option value="Mexican">Mexican</option>
+                                <option value="Japanese">Japanese</option>
+                                <option value="Beauty & Spas">Beauty & Spas</option>
+                                <option value="Health & Medical">Health & Medical</option>
+                                <option value="Home Services">Home Services</option>
+                                <option value="Automotive">Automotive</option>
+                                <option value="Hair Salons">Hair Salons</option>
+                                <option value="Gyms">Gyms</option>
+                                <option value="Hotels & Travel">Hotels & Travel</option>
                             </select>
                         </div>
                     </div>
@@ -120,14 +135,33 @@
                             <label for="mongodbAttributeKey" class="form-label">Filter By:</label>
                             <select id="mongodbAttributeKey" class="form-select">
                                 <option value="">No Filter</option>
-                                <option value="RestaurantsPriceRange2">Price Range</option>
-                                <option value="BusinessParking">Parking</option>
-                                <option value="BikeParking">Bike Parking</option>
-                                <option value="HasTV">Has TV</option>
-                                <option value="OutdoorSeating">Outdoor Seating</option>
-                                <option value="GoodForKids">Good For Kids</option>
-                                <option value="RestaurantsTakeOut">Takeout</option>
-                                <option value="RestaurantsDelivery">Delivery</option>
+                                <optgroup label="General Attributes">
+                                    <option value="RestaurantsPriceRange2">Price Range</option>
+                                    <option value="GoodForKids">Good For Kids</option>
+                                    <option value="BikeParking">Bike Parking</option>
+                                    <option value="BusinessAcceptsCreditCards">Accepts Credit Cards</option>
+                                    <option value="BusinessParking">Parking Available</option>
+                                    <option value="Caters">Offers Catering</option>
+                                    <option value="DogsAllowed">Dogs Allowed</option>
+                                </optgroup>
+                                <optgroup label="Restaurant Features">
+                                    <option value="Alcohol">Alcohol</option>
+                                    <option value="HasTV">Has TV</option>
+                                    <option value="NoiseLevel">Noise Level</option>
+                                    <option value="OutdoorSeating">Outdoor Seating</option>
+                                    <option value="RestaurantsAttire">Attire</option>
+                                    <option value="RestaurantsDelivery">Delivery</option>
+                                    <option value="RestaurantsGoodForGroups">Good For Groups</option>
+                                    <option value="RestaurantsReservations">Takes Reservations</option>
+                                    <option value="RestaurantsTableService">Table Service</option>
+                                    <option value="RestaurantsTakeOut">Takeout</option>
+                                    <option value="GoodForMeal">Good For Meal</option>
+                                    <option value="HappyHour">Happy Hour</option>
+                                </optgroup>
+                                <optgroup label="Ambience">
+                                    <option value="Ambience">Ambience</option>
+                                    <option value="WiFi">WiFi</option>
+                                </optgroup>
                             </select>
                         </div>
                         <div class="col-md-3">

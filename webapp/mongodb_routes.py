@@ -81,7 +81,7 @@ def mongodb_overview_stats():
 
 @mongodb_bp.route('/top_businesses')
 def mongodb_top_businesses():
-    """Get top businesses filtered by category"""
+    """Get top businesses filtered by category with improved attribute handling"""
     # Get query parameters
     category = request.args.get('category', '')
     page = int(request.args.get('page', 1))
@@ -92,6 +92,17 @@ def mongodb_top_businesses():
     attribute_key = request.args.get('attribute_key', '')
     attribute_value = request.args.get('attribute_value', '')
     sort_by = request.args.get('sort_by', 'stars')
+    
+    # Debug logging
+    logger.info(f"MongoDB search request parameters:")
+    logger.info(f"  category: {category}")
+    logger.info(f"  query: {query}")
+    logger.info(f"  location: {location}")
+    logger.info(f"  min_rating: {min_rating}")
+    logger.info(f"  attribute_key: {attribute_key}")
+    logger.info(f"  attribute_value: {attribute_value}")
+    logger.info(f"  sort_by: {sort_by}")
+    logger.info(f"  page: {page}, limit: {limit}")
     
     # Calculate offset based on page and limit
     offset = (page - 1) * limit
@@ -129,37 +140,140 @@ def mongodb_top_businesses():
         if min_rating:
             match_criteria["stars"] = {"$gte": float(min_rating)}
         
-        # Add attribute filter if both key and value are provided
+        # DEBUGGING: Check the structure of a sample business document
+        sample_business = db.businesses.find_one()
+        logger.info(f"Sample business structure: {sample_business.keys() if sample_business else 'No businesses found'}")
+        if sample_business and 'attributes' in sample_business:
+            logger.info(f"Sample business attributes: {sample_business['attributes'].keys()}")
+        
+        # Enhanced attribute filtering with better debugging
         if attribute_key and attribute_value:
-            # Handle common Yelp dataset attribute structures
-            if attribute_key in ["RestaurantsPriceRange2", "BikeParking", "HasTV", "OutdoorSeating", 
-                                "GoodForKids", "RestaurantsTakeOut", "RestaurantsDelivery"]:
-                # Direct attribute
-                attribute_path = f"attributes.{attribute_key}"
-                
-                # Handle boolean values
-                if attribute_value.lower() in ('true', 'false'):
-                    attribute_value = attribute_value.lower() == 'true'
-                
-                match_criteria[attribute_path] = attribute_value
-            elif attribute_key == "BusinessParking":
-                # BusinessParking is stored as a nested object with properties
+            logger.info(f"Processing attribute filter: {attribute_key}={attribute_value}")
+            
+            # First, check if we need to normalize the attribute key
+            # For example, if UI sends "Good For Kids" but DB stores "GoodForKids"
+            normalized_key = attribute_key.replace(" ", "")
+            
+            # Check if the attribute exists directly on businesses collection
+            # This will help determine where attributes are stored
+            sample_with_attr = db.businesses.find_one(
+                {f"attributes.{attribute_key}": {"$exists": True}}
+            )
+            if sample_with_attr:
+                logger.info(f"Found business with attribute: {attribute_key}")
+            else:
+                logger.info(f"No businesses found with attribute: {attribute_key}")
+                # Try with normalized key
+                sample_with_attr = db.businesses.find_one(
+                    {f"attributes.{normalized_key}": {"$exists": True}}
+                )
+                if sample_with_attr:
+                    logger.info(f"Found business with normalized attribute: {normalized_key}")
+                    attribute_key = normalized_key
+            
+            # Handle different attribute types based on Yelp dataset structure
+            if attribute_key == "RestaurantsPriceRange2":
+                # Try first as a number
+                try:
+                    # Try as integer (most likely format)
+                    value_as_int = int(attribute_value)
+                    match_criteria[f"attributes.{attribute_key}"] = value_as_int
+                    logger.info(f"Filtering by price range as integer: {value_as_int}")
+                except ValueError:
+                    # Try as string if it's not a valid integer
+                    match_criteria[f"attributes.{attribute_key}"] = attribute_value
+                    logger.info(f"Filtering by price range as string: {attribute_value}")
+            
+            elif attribute_key in ["BikeParking", "HasTV", "OutdoorSeating", "GoodForKids", 
+                                "RestaurantsTakeOut", "RestaurantsDelivery", "Caters",
+                                "DogsAllowed", "BusinessAcceptsCreditCards", "HappyHour",
+                                "RestaurantsReservations", "RestaurantsTableService", 
+                                "RestaurantsGoodForGroups", "WheelchairAccessible",
+                                "DriveThru", "BusinessAcceptsBitcoin"]:
+                # Boolean value handling - check both formats (true/True)
                 if attribute_value.lower() == 'true':
-                    # Find businesses with any parking option set to true
+                    # Try both boolean true and string "True" (Python formatting)
                     match_criteria["$or"] = [
-                        {f"attributes.{attribute_key}.garage": True},
-                        {f"attributes.{attribute_key}.street": True},
-                        {f"attributes.{attribute_key}.lot": True},
-                        {f"attributes.{attribute_key}.valet": True}
+                        {f"attributes.{attribute_key}": True},
+                        {f"attributes.{attribute_key}": "True"},
+                    ]
+                    logger.info(f"Filtering by boolean attribute: {attribute_key}=true (checking both formats)")
+                elif attribute_value.lower() == 'false':
+                    # Try both boolean false and string "False" (Python formatting)
+                    match_criteria["$or"] = [
+                        {f"attributes.{attribute_key}": False},
+                        {f"attributes.{attribute_key}": "False"},
+                    ]
+                    logger.info(f"Filtering by boolean attribute: {attribute_key}=false (checking both formats)")
+                else:
+                    # Handle None/null values
+                    if attribute_value.lower() == 'none':
+                        match_criteria[f"attributes.{attribute_key}"] = None
+                        logger.info(f"Filtering by null attribute: {attribute_key}=null")
+                    else:
+                        # Direct value matching
+                        match_criteria[f"attributes.{attribute_key}"] = attribute_value
+                        logger.info(f"Filtering by direct attribute value: {attribute_key}={attribute_value}")
+            
+            elif attribute_key in ["Alcohol", "NoiseLevel", "WiFi", "RestaurantsAttire"]:
+                # For string values, handle potential unicode prefix (u'value')
+                if attribute_value.startswith('u\'') and attribute_value.endswith('\''):
+                    # Remove unicode prefix if it exists
+                    clean_value = attribute_value[2:-1]
+                    logger.info(f"Cleaned unicode string value: {clean_value}")
+                    match_criteria["$or"] = [
+                        {f"attributes.{attribute_key}": clean_value},
+                        {f"attributes.{attribute_key}": attribute_value}
                     ]
                 else:
-                    # Find businesses with all parking options either false or not set
-                    match_criteria["$and"] = [
-                        {f"attributes.{attribute_key}.garage": {"$ne": True}},
-                        {f"attributes.{attribute_key}.street": {"$ne": True}},
-                        {f"attributes.{attribute_key}.lot": {"$ne": True}},
-                        {f"attributes.{attribute_key}.valet": {"$ne": True}}
+                    # Try both with and without quotes for string values
+                    match_criteria["$or"] = [
+                        {f"attributes.{attribute_key}": attribute_value},
+                        {f"attributes.{attribute_key}": f"'{attribute_value}'"},
+                        {f"attributes.{attribute_key}": f"u'{attribute_value}'"}
                     ]
+                logger.info(f"Filtering by string attribute with multiple formats: {attribute_key}")
+            
+            elif attribute_key == "BusinessParking":
+                # BusinessParking is stored as a nested object with boolean properties
+                parking_type = attribute_value  # e.g., "lot", "garage", "street"
+                
+                # Try different formats for the parking value
+                match_criteria["$or"] = [
+                    {f"attributes.{attribute_key}.{parking_type}": True},
+                    {f"attributes.{attribute_key}.{parking_type}": "True"}
+                ]
+                logger.info(f"Filtering by parking type: {parking_type}")
+                
+            elif attribute_key == "GoodForMeal":
+                # GoodForMeal is stored as a nested object with boolean properties
+                meal_type = attribute_value  # e.g., "breakfast", "lunch", "dinner"
+                
+                # Try different formats for the meal value
+                match_criteria["$or"] = [
+                    {f"attributes.{attribute_key}.{meal_type}": True},
+                    {f"attributes.{attribute_key}.{meal_type}": "True"}
+                ]
+                logger.info(f"Filtering by meal type: {meal_type}")
+                
+            elif attribute_key == "Ambience":
+                # Ambience is stored as a nested object with boolean properties
+                ambience_type = attribute_value  # e.g., "romantic", "casual", "classy"
+                
+                # Try different formats for the ambience value
+                match_criteria["$or"] = [
+                    {f"attributes.{attribute_key}.{ambience_type}": True},
+                    {f"attributes.{attribute_key}.{ambience_type}": "True"}
+                ]
+                logger.info(f"Filtering by ambience type: {ambience_type}")
+                
+            else:
+                # Default case - direct attribute matching
+                match_criteria[f"attributes.{attribute_key}"] = attribute_value
+                logger.info(f"Using default attribute matching: {attribute_key}={attribute_value}")
+        
+        # Log the final query for debugging
+        logger.info(f"Final MongoDB query: {match_criteria}")
         
         # Determine sort order
         if sort_by == 'stars':
@@ -171,6 +285,7 @@ def mongodb_top_businesses():
         
         # Get total count for pagination
         total_count = db.businesses.count_documents(match_criteria)
+        logger.info(f"Found {total_count} businesses matching criteria")
         
         # Calculate total pages
         total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
@@ -195,6 +310,7 @@ def mongodb_top_businesses():
         ]
         
         businesses = list(db.businesses.aggregate(pipeline))
+        logger.info(f"Returning {len(businesses)} businesses")
         
         # Extract location data into top-level city and state fields
         for business in businesses:
@@ -230,7 +346,9 @@ def mongodb_top_businesses():
                 "page": page,
                 "limit": limit,
                 "pages": 0
-            }
+            },
+            "error": str(e),
+            "trace": traceback.format_exc()
         })
 
 @mongodb_bp.route('/business_performance')
