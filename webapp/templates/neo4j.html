@@ -9,6 +9,12 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="neo4j-network-tab" data-bs-toggle="pill" data-bs-target="#neo4j-network" type="button" role="tab">Network Analysis</button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="neo4j-recommendations-tab" data-bs-toggle="pill" data-bs-target="#neo4j-recommendations" type="button" role="tab">Recommendations</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="neo4j-analytics-tab" data-bs-toggle="pill" data-bs-target="#neo4j-analytics" type="button" role="tab">Graph Analytics</button>
+    </li>
 </ul>
 
 <!-- Neo4j Dashboard Pill Content -->
@@ -55,7 +61,7 @@
             </div>
         </div>
 
-        <!-- Categories Chart -->
+        <!-- Category and Relationship Charts -->
         <div class="row mt-4">
             <div class="col-md-6">
                 <div class="card card-dashboard h-100">
@@ -78,13 +84,136 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Network Density -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card card-dashboard">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Network Density Metrics</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row" id="neo4j-density-metrics">
+                            <!-- Metrics will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Top Users -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card card-dashboard">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Most Active Users</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>User Name</th>
+                                        <th>Review Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="neo4j-top-users">
+                                    <!-- Users will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Neo4j Businesses -->
     <div class="tab-pane fade" id="neo4j-businesses" role="tabpanel">
+        <!-- Business Search Component -->
+        <div class="card card-dashboard mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Business Search</h5>
+            </div>
+            <div class="card-body">
+                <form id="neo4jSearchForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="neo4jSearchName" class="form-label">Business Name:</label>
+                            <input type="text" id="neo4jSearchName" class="form-control" placeholder="Search by name">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="neo4jLocationFilter" class="form-label">Location:</label>
+                            <input type="text" id="neo4jLocationFilter" class="form-control" placeholder="City or state">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="neo4jCategoryFilter" class="form-label">Category:</label>
+                            <select id="neo4jCategoryFilter" class="form-select">
+                                <option value="">Any Category</option>
+                                <option value="Restaurants">Restaurants</option>
+                                <option value="Bakeries">Bakeries</option>
+                                <option value="Shopping">Shopping</option>
+                                <option value="Food">Food</option>
+                                <option value="Nightlife">Nightlife</option>
+                                <option value="Coffee & Tea">Coffee & Tea</option>
+                                <option value="Bars">Bars</option>
+                                <option value="Fast Food">Fast Food</option>
+                                <option value="Pizza">Pizza</option>
+                                <option value="Breakfast & Brunch">Breakfast & Brunch</option>
+                                <option value="Beauty & Spas">Beauty & Spas</option>
+                                <option value="Home Services">Home Services</option>
+                                <option value="Automotive">Automotive</option>
+                                <option value="Health & Medical">Health & Medical</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="neo4jRatingFilter" class="form-label">Minimum Rating:</label>
+                            <select id="neo4jRatingFilter" class="form-select">
+                                <option value="">Any Rating</option>
+                                <option value="5">5 Stars</option>
+                                <option value="4">4+ Stars</option>
+                                <option value="3">3+ Stars</option>
+                                <option value="2">2+ Stars</option>
+                                <option value="1">1+ Star</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="neo4jConnectedFilter" class="form-label">Connected To Business ID:</label>
+                            <input type="text" id="neo4jConnectedFilter" class="form-control" placeholder="Business ID">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="neo4jSortBy" class="form-label">Sort By:</label>
+                            <select id="neo4jSortBy" class="form-select">
+                                <option value="stars">Highest Rated</option>
+                                <option value="review_count">Most Reviewed</option>
+                                <option value="name">Business Name</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button id="neo4jSearchButton" type="button" class="btn btn-primary me-2">Search</button>
+                            <button id="neo4jClearButton" type="button" class="btn btn-outline-secondary">Clear</button>
+                        </div>
+                    </div>
+                </form>
+                
+                <div id="neo4jSearchLoader" class="loader d-none"></div>
+                <div id="neo4jSearchResults"></div>
+                <div id="neo4jSearchPagination" class="mt-3 d-none">
+                    <nav>
+                        <ul class="pagination justify-content-center">
+                            <!-- Pagination links will be inserted here -->
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Search: Top Businesses by Category -->
         <div class="card card-dashboard">
             <div class="card-header">
-                <h5 class="card-title mb-0">Top Businesses</h5>
+                <h5 class="card-title mb-0">Top Businesses By Category</h5>
             </div>
             <div class="card-body">
                 <div class="row mb-3">
@@ -124,21 +253,170 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <h6>Business Information</h6>
                             <dl class="row">
-                                <dt class="col-sm-4">Location:</dt>
-                                <dd class="col-sm-8" id="neo4jBusinessDetailsLocation"></dd>
-                                <dt class="col-sm-4">Rating:</dt>
-                                <dd class="col-sm-8" id="neo4jBusinessDetailsRating"></dd>
-                                <dt class="col-sm-4">Reviews:</dt>
-                                <dd class="col-sm-8" id="neo4jBusinessDetailsReviews"></dd>
-                                <dt class="col-sm-4">Checkins:</dt>
-                                <dd class="col-sm-8" id="neo4jBusinessDetailsCheckins"></dd>
+                                <dt class="col-sm-2">Location:</dt>
+                                <dd class="col-sm-10" id="neo4jBusinessDetailsLocation"></dd>
+                                <dt class="col-sm-2">Rating:</dt>
+                                <dd class="col-sm-10" id="neo4jBusinessDetailsRating"></dd>
+                                <dt class="col-sm-2">Reviews:</dt>
+                                <dd class="col-sm-10" id="neo4jBusinessDetailsReviews"></dd>
+                                <dt class="col-sm-2">Checkins:</dt>
+                                <dd class="col-sm-10" id="neo4jBusinessDetailsCheckins"></dd>
+                                <dt class="col-sm-2">Categories:</dt>
+                                <dd class="col-sm-10" id="neo4jBusinessDetailsCategories"></dd>
                             </dl>
                         </div>
-                        <div class="col-md-6">
-                            <canvas id="neo4jBusinessDetailsChart"></canvas>
+                    </div>
+                    
+                    <!-- Business Details Tabs -->
+                    <div class="mt-4">
+                        <ul class="nav nav-tabs" id="businessDetailsTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="neo4j-performance-tab" data-bs-toggle="tab" data-bs-target="#neo4j-performance-content" type="button" role="tab">Performance</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="neo4j-reviews-tab" data-bs-toggle="tab" data-bs-target="#neo4j-reviews-content" type="button" role="tab">Reviews</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="neo4j-network-details-tab" data-bs-toggle="tab" data-bs-target="#neo4j-network-details-content" type="button" role="tab">Network</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="neo4j-recommend-tab" data-bs-toggle="tab" data-bs-target="#neo4j-recommend-content" type="button" role="tab">Recommendations</button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content mt-3" id="neo4jBusinessDetailsTabContent">
+                            <!-- Performance Tab (with fixed height chart) -->
+                            <div class="tab-pane fade show active" id="neo4j-performance-content" role="tabpanel">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="card-title mb-0">Monthly Activity</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="height: 350px; width: 100%; position: relative;">
+                                            <canvas id="neo4jBusinessDetailsChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Reviews Tab -->
+                            <div class="tab-pane fade" id="neo4j-reviews-content" role="tabpanel">
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h6>Customer Reviews</h6>
+                                        <div>
+                                            <select id="neo4jReviewSortSelect" class="form-select form-select-sm">
+                                                <option value="date_desc">Newest First</option>
+                                                <option value="date_asc">Oldest First</option>
+                                                <option value="stars_desc">Highest Rating</option>
+                                                <option value="stars_asc">Lowest Rating</option>
+                                                <option value="useful_desc">Most Useful</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="neo4jReviewsLoader" class="loader d-none"></div>
+                                <div id="neo4jReviewsList"></div>
+                                <div id="neo4jReviewsPagination" class="mt-3">
+                                    <nav>
+                                        <ul class="pagination justify-content-center">
+                                            <!-- Pagination will be added here -->
+                                        </ul>
+                                    </nav>
+                                </div>
+                            </div>
+                            
+                            <!-- Network Details Tab -->
+                            <div class="tab-pane fade" id="neo4j-network-details-content" role="tabpanel">
+                                <div id="neo4jNetworkDetailsLoader" class="loader d-none"></div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card mb-3">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Related by Category</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="neo4jCategoryRelatedTable"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card mb-3">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Related by User Reviews</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="neo4jUserRelatedTable"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Shared Categories</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="neo4jSharedCategoriesTable"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Most Connected Users</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="neo4jConnectedUsersTable"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Recommendations Tab -->
+                            <div class="tab-pane fade" id="neo4j-recommend-content" role="tabpanel">
+                                <div id="neo4jRecommendationsLoader" class="loader d-none"></div>
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="card mb-3">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Similar Businesses</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="neo4jSimilarBusinessesTable"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">Complementary Businesses</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="neo4jComplementaryTable"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="card-title mb-0">People Who Reviewed This Also Reviewed</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="neo4jAlsoReviewedTable"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -156,7 +434,7 @@
                 <div class="row mb-3">
                     <div class="col-md-9">
                         <label for="neo4jBusinessIdInput" class="form-label">Enter Business ID:</label>
-                        <input type="text" id="neo4jBusinessIdInput" class="form-control" placeholder="e.g., sample_business_neo4j_1">
+                        <input type="text" id="neo4jBusinessIdInput" class="form-control" placeholder="Enter business ID for network analysis">
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
                         <button id="loadNeo4jNetwork" class="btn btn-primary w-100">Analyze Network</button>
@@ -165,7 +443,7 @@
                 
                 <div id="neo4jNetworkLoader" class="loader d-none"></div>
                 <div id="neo4jNetworkResults" class="d-none">
-                    <div class="row">
+                    <div class="row mb-4">
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header">
@@ -183,6 +461,267 @@
                                 </div>
                                 <div class="card-body">
                                     <div id="neo4jUserRelatedTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Shared Categories</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="neo4jSharedCategoriesTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Most Connected Users</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="neo4jConnectedUsersTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Path Finder Section -->
+        <div class="card card-dashboard mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Path Finder</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-5">
+                        <label for="neo4jBusinessId1" class="form-label">Starting Business ID:</label>
+                        <input type="text" id="neo4jBusinessId1" class="form-control" placeholder="Business ID 1">
+                    </div>
+                    <div class="col-md-5">
+                        <label for="neo4jBusinessId2" class="form-label">Ending Business ID:</label>
+                        <input type="text" id="neo4jBusinessId2" class="form-control" placeholder="Business ID 2">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button id="findPathButton" class="btn btn-primary w-100">Find Paths</button>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="pathType" id="pathTypeUser" value="user" checked>
+                            <label class="form-check-label" for="pathTypeUser">Paths through Users</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="pathType" id="pathTypeCategory" value="category">
+                            <label class="form-check-label" for="pathTypeCategory">Paths through Categories</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="pathFinderLoader" class="loader d-none"></div>
+                <div id="pathFinderResults" class="d-none">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="alert alert-info">
+                                <div id="pathFinderSummary"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Found Paths</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="pathFinderTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Neo4j Recommendations -->
+    <div class="tab-pane fade" id="neo4j-recommendations" role="tabpanel">
+        <!-- Business Recommendations -->
+        <div class="card card-dashboard mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Business Recommendations</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-9">
+                        <label for="neo4jRecommendBusinessId" class="form-label">Enter Business ID:</label>
+                        <input type="text" id="neo4jRecommendBusinessId" class="form-control" placeholder="Enter business ID to get recommendations">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button id="loadBusinessRecommendations" class="btn btn-primary w-100">Get Recommendations</button>
+                    </div>
+                </div>
+                
+                <div id="businessRecommendationsLoader" class="loader d-none"></div>
+                <div id="businessRecommendationsResults" class="d-none">
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Similar Businesses</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="similarBusinessesTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Complementary Businesses</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="complementaryBusinessesTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">People Who Reviewed This Also Reviewed</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="alsoReviewedTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- User Recommendations -->
+        <div class="card card-dashboard">
+            <div class="card-header">
+                <h5 class="card-title mb-0">User Recommendations</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-9">
+                        <label for="neo4jUserIdInput" class="form-label">Enter User ID:</label>
+                        <input type="text" id="neo4jUserIdInput" class="form-control" placeholder="Enter user ID to get recommendations">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button id="loadUserRecommendations" class="btn btn-primary w-100">Get Recommendations</button>
+                    </div>
+                </div>
+                
+                <div id="userRecommendationsLoader" class="loader d-none"></div>
+                <div id="userRecommendationsResults" class="d-none">
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">User's Preferred Categories</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="preferredCategoriesTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Category-Based Recommendations</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="categoryRecommendationsTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Collaborative Recommendations</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="collaborativeRecommendationsTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Neo4j Analytics -->
+    <div class="tab-pane fade" id="neo4j-analytics" role="tabpanel">
+        <div class="card card-dashboard mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Graph Analytics Dashboard</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-12 d-flex justify-content-end">
+                        <button id="loadGraphAnalytics" class="btn btn-primary">Load Graph Analytics</button>
+                    </div>
+                </div>
+                
+                <div id="graphAnalyticsLoader" class="loader d-none"></div>
+                <div id="graphAnalyticsResults" class="d-none">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Most Central Businesses</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="centralBusinessesTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Most Influential Users</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="influentialUsersTable"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Most Popular Categories</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="topCategoriesContainer">
+                                        <canvas id="topCategoriesChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Category Co-occurrence</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="categoryPairsTable"></div>
                                 </div>
                             </div>
                         </div>
