@@ -210,41 +210,6 @@
             </div>
         </div>
 
-        <!-- Quick Search: Top Businesses by Category -->
-        <div class="card card-dashboard">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Top Businesses By Category</h5>
-            </div>
-            <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label for="neo4jCategorySelect" class="form-label">Category:</label>
-                        <select id="neo4jCategorySelect" class="form-select">
-                            <option value="Restaurants">Restaurants</option>
-                            <option value="Shopping">Shopping</option>
-                            <option value="Food">Food</option>
-                            <option value="Beauty & Spas">Beauty & Spas</option>
-                            <option value="Home Services">Home Services</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="neo4jLimitSelect" class="form-label">Limit:</label>
-                        <select id="neo4jLimitSelect" class="form-select">
-                            <option value="10">10</option>
-                            <option value="25">25</option>
-                            <option value="50">50</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <button id="loadNeo4jBusinesses" class="btn btn-primary w-100">Load Data</button>
-                    </div>
-                </div>
-                
-                <div id="neo4jBusinessesLoader" class="loader d-none"></div>
-                <div id="neo4jBusinessesTable"></div>
-            </div>
-        </div>
-
         <!-- Business Details -->
         <div id="neo4jBusinessDetails" class="business-details-card d-none">
             <div class="card card-dashboard">

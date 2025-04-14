@@ -1707,5 +1707,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // When clicking on the businesses tab, auto-load the businesses
     document.getElementById('neo4j-businesses-tab')?.addEventListener('shown.bs.tab', function (e) {
         loadNeo4jBusinesses();
+        searchNeo4jBusinesses(1);
     });
 });
