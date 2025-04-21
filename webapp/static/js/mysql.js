@@ -1419,118 +1419,9 @@ function handleSqlQuerySelection() {
     const querySelect = document.getElementById('sqlQuerySelect');
     const queryDisplay = document.getElementById('sqlQueryDisplay');
     
-    const queries = {
-        'top_businesses_by_category': `-- Find top businesses by category with rating and review count
-SELECT 
-    c.category_name,
-    b.business_name,
-    b.stars,
-    b.review_count,
-    l.city,
-    l.state
-FROM 
-    dim_business b
-    JOIN dim_location l ON b.location_id = l.location_id
-    JOIN business_category bc ON b.business_id = bc.business_id
-    JOIN dim_category c ON bc.category_id = c.category_id
-WHERE 
-    c.category_name = 'Restaurants'
-ORDER BY 
-    b.stars DESC, b.review_count DESC
-LIMIT 10;`,
-        
-        'rating_distribution_by_city': `-- Get rating distribution by city
-SELECT 
-    l.city,
-    l.state,
-    COUNT(DISTINCT b.business_id) as business_count,
-    AVG(b.stars) as avg_rating,
-    SUM(b.review_count) as total_reviews,
-    COUNT(CASE WHEN b.stars >= 4.5 THEN 1 END) as five_star_count,
-    COUNT(CASE WHEN b.stars >= 3.5 AND b.stars < 4.5 THEN 1 END) as four_star_count,
-    COUNT(CASE WHEN b.stars >= 2.5 AND b.stars < 3.5 THEN 1 END) as three_star_count,
-    COUNT(CASE WHEN b.stars >= 1.5 AND b.stars < 2.5 THEN 1 END) as two_star_count,
-    COUNT(CASE WHEN b.stars < 1.5 THEN 1 END) as one_star_count
-FROM 
-    dim_business b
-    JOIN dim_location l ON b.location_id = l.location_id
-GROUP BY 
-    l.city, l.state
-HAVING 
-    COUNT(DISTINCT b.business_id) > 10
-ORDER BY 
-    business_count DESC
-LIMIT 10;`,
-        
-        'review_volume_trend': `-- Review volume trend over time
-SELECT 
-    t.year_actual,
-    t.month_actual,
-    t.month_name,
-    COUNT(*) as review_count,
-    AVG(r.stars) as avg_stars
-FROM 
-    fact_review r
-    JOIN dim_time t ON r.time_id = t.time_id
-WHERE 
-    t.year_actual >= 2020
-GROUP BY 
-    t.year_actual, t.month_actual, t.month_name
-ORDER BY 
-    t.year_actual, t.month_actual;`,
-        
-        'business_category_popularity': `-- Business category popularity over time
-SELECT 
-    c.category_name,
-    t.year_actual,
-    COUNT(DISTINCT b.business_id) as business_count,
-    COUNT(DISTINCT r.review_id) as review_count,
-    AVG(r.stars) as avg_rating
-FROM 
-    fact_review r
-    JOIN dim_business b ON r.business_id = b.business_id
-    JOIN business_category bc ON b.business_id = bc.business_id
-    JOIN dim_category c ON bc.category_id = c.category_id
-    JOIN dim_time t ON r.time_id = t.time_id
-WHERE 
-    t.year_actual >= 2018
-GROUP BY 
-    c.category_name, t.year_actual
-HAVING 
-    review_count >= 100
-ORDER BY 
-    t.year_actual, review_count DESC;`,
-        
-        'user_review_patterns': `-- User review patterns and preferences
-SELECT 
-    u.user_id,
-    u.name as user_name,
-    COUNT(r.review_id) as review_count,
-    AVG(r.stars) as avg_rating,
-    MIN(t.date_actual) as first_review_date,
-    MAX(t.date_actual) as last_review_date,
-    COUNT(DISTINCT b.business_id) as unique_businesses,
-    COUNT(DISTINCT c.category_id) as unique_categories,
-    GROUP_CONCAT(DISTINCT c.category_name ORDER BY COUNT(r.review_id) DESC SEPARATOR ', ') as top_categories
-FROM 
-    fact_review r
-    JOIN dim_user u ON r.user_id = u.user_id
-    JOIN dim_business b ON r.business_id = b.business_id
-    JOIN business_category bc ON b.business_id = bc.business_id
-    JOIN dim_category c ON bc.category_id = c.category_id
-    JOIN dim_time t ON r.time_id = t.time_id
-GROUP BY 
-    u.user_id, u.name
-HAVING 
-    review_count >= 10
-ORDER BY 
-    review_count DESC
-LIMIT 10;`
-    };
-    
     const selectedQuery = querySelect.value;
-    if (selectedQuery && queries[selectedQuery]) {
-        queryDisplay.textContent = queries[selectedQuery];
+    if (selectedQuery && improvedQueries[selectedQuery]) {
+        queryDisplay.textContent = improvedQueries[selectedQuery];
     } else {
         queryDisplay.textContent = '-- Select a query from the dropdown above';
     }
@@ -1555,7 +1446,7 @@ function runSqlQuery() {
     // Start timer
     const startTime = performance.now();
     
-    // Fetch results using API endpoints
+    // Improved endpoint mapping with better data handling
     const endpointMap = {
         'top_businesses_by_category': '/api/mysql/top_businesses?category=Restaurants&limit=10',
         'rating_distribution_by_city': '/api/mysql/city_ratings',
@@ -1579,30 +1470,116 @@ function runSqlQuery() {
             const queryTime = ((endTime - startTime) / 1000).toFixed(2);
             document.getElementById('queryTimeDisplay').textContent = `Query executed in ${queryTime} seconds`;
             
-            // Process data for display
+            // Process data for display based on query type
             let resultHtml = '';
             
-            // Handle different response formats
-            if (Array.isArray(data)) {
-                resultHtml = createTableFromArray(data);
-            } else if (data.businesses && Array.isArray(data.businesses)) {
-                resultHtml = createTableFromArray(data.businesses);
-            } else {
-                // Try to extract data from properties
-                const possibleArrayKeys = Object.keys(data).filter(key => Array.isArray(data[key]));
-                if (possibleArrayKeys.length > 0) {
-                    resultHtml = createTableFromArray(data[possibleArrayKeys[0]]);
-                } else {
-                    // No array found, display as JSON
-                    resultHtml = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-                }
+            // Enhanced data processing based on query type
+            switch (selectedQuery) {
+                case 'top_businesses_by_category':
+                    // Handle businesses data
+                    if (data.businesses && Array.isArray(data.businesses)) {
+                        resultHtml = createTableFromArray(data.businesses);
+                    } else if (Array.isArray(data)) {
+                        resultHtml = createTableFromArray(data);
+                    } else {
+                        resultHtml = '<div class="alert alert-info">No business data found</div>';
+                    }
+                    break;
+                    
+                case 'rating_distribution_by_city':
+                    // Handle city ratings data
+                    if (Array.isArray(data)) {
+                        resultHtml = createTableFromArray(data);
+                    } else {
+                        resultHtml = '<div class="alert alert-info">No city rating data found</div>';
+                    }
+                    break;
+                    
+                case 'review_volume_trend':
+                    // Transform time-series data into tabular format
+                    if (data.dates && data.review_counts) {
+                        const tableData = data.dates.map((date, index) => ({
+                            Date: date,
+                            'Review Count': data.review_counts[index],
+                            'Month': new Date(date).toLocaleString('default', { month: 'long' }),
+                            'Year': new Date(date).getFullYear()
+                        }));
+                        resultHtml = createTableFromArray(tableData);
+                    } else {
+                        resultHtml = '<div class="alert alert-info">No trend data found</div>';
+                    }
+                    break;
+                    
+                case 'business_category_popularity':
+                    // Transform category trend data
+                    if (data.periods && data.data && data.categories) {
+                        const categoryName = data.categories[0];
+                        const tableData = data.periods.map((period, index) => {
+                            // Extract year and quarter from period (format: "2023-Q1")
+                            const [year, quarter] = period.split('-');
+                            return {
+                                'Period': period,
+                                'Year': year,
+                                'Quarter': quarter,
+                                'Category': categoryName,
+                                'Review Count': data.data[categoryName][index]
+                            };
+                        });
+                        resultHtml = createTableFromArray(tableData);
+                    } else {
+                        resultHtml = '<div class="alert alert-info">No category trend data found</div>';
+                    }
+                    break;
+                    
+                case 'user_review_patterns':
+                    // Handle user patterns data - already in tabular format
+                    if (Array.isArray(data)) {
+                        // Improve the display of dates
+                        const processedData = data.map(user => {
+                            const processed = {...user};
+                            if (processed.first_review_date) {
+                                processed.first_review_date = new Date(processed.first_review_date).toLocaleDateString();
+                            }
+                            if (processed.last_review_date) {
+                                processed.last_review_date = new Date(processed.last_review_date).toLocaleDateString();
+                            }
+                            return processed;
+                        });
+                        resultHtml = createTableFromArray(processedData);
+                    } else {
+                        resultHtml = '<div class="alert alert-info">No user data found</div>';
+                    }
+                    break;
+                    
+                default:
+                    // Fallback for unhandled query types
+                    if (Array.isArray(data)) {
+                        resultHtml = createTableFromArray(data);
+                    } else if (typeof data === 'object') {
+                        // Find arrays in the data
+                        const arrayProps = Object.keys(data).filter(key => Array.isArray(data[key]));
+                        if (arrayProps.length > 0) {
+                            // Use the first array found
+                            resultHtml = createTableFromArray(data[arrayProps[0]]);
+                        } else {
+                            // Display as JSON if no array is found
+                            resultHtml = `<pre class="bg-light p-3">${JSON.stringify(data, null, 2)}</pre>`;
+                        }
+                    } else {
+                        resultHtml = `<pre class="bg-light p-3">${JSON.stringify(data, null, 2)}</pre>`;
+                    }
             }
             
             resultsContainer.innerHTML = resultHtml;
         })
         .catch(error => {
             console.error('Error running query:', error);
-            resultsContainer.innerHTML = `<div class="alert alert-danger">Error executing query: ${error.message}</div>`;
+            resultsContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <h5>Error executing query</h5>
+                    <p>${error.message}</p>
+                    <p>Please try another query or check the server connection.</p>
+                </div>`;
         })
         .finally(() => {
             resultsLoader.classList.add('d-none');
@@ -1621,7 +1598,7 @@ function createTableFromArray(data) {
     let tableHtml = `
         <div class="table-responsive">
             <table class="table table-striped table-hover">
-                <thead>
+                <thead class="table-light">
                     <tr>
                         ${columns.map(col => `<th>${formatColumnName(col)}</th>`).join('')}
                     </tr>
@@ -1629,7 +1606,7 @@ function createTableFromArray(data) {
                 <tbody>
     `;
     
-    // Add data rows
+    // Add data rows with improved formatting
     data.forEach(row => {
         tableHtml += '<tr>';
         columns.forEach(col => {
@@ -1648,14 +1625,226 @@ function createTableFromArray(data) {
     return tableHtml;
 }
 
+
 // Format column name for display
 function formatColumnName(columnName) {
+    if (!columnName) return '';
+    
+    // Handle special cases first
+    if (columnName === 'avg_rating') return 'Average Rating';
+    if (columnName === 'review_count') return 'Review Count';
+    if (columnName === 'business_id') return 'Business ID';
+    if (columnName === 'business_name') return 'Business Name';
+    if (columnName === 'unique_businesses') return 'Unique Businesses';
+    if (columnName === 'unique_categories') return 'Unique Categories';
+    if (columnName === 'top_categories') return 'Top Categories';
+    
+    // General formatting for other columns
     return columnName
         .replace(/_/g, ' ')
         .split(' ')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
 }
+
+// Enhanced cell value formatting with better type handling
+function formatCellValue(value) {
+    if (value === null || value === undefined) {
+        return '<span class="text-muted">NULL</span>';
+    }
+    
+    if (typeof value === 'number') {
+        // Format decimal numbers
+        if (Number.isInteger(value)) {
+            // Format integers with commas for readability
+            return value.toLocaleString();
+        } else {
+            // Format decimals with 2 decimal places
+            return value.toFixed(2);
+        }
+    }
+    
+    if (typeof value === 'boolean') {
+        return value ? 
+            '<span class="badge bg-success">Yes</span>' : 
+            '<span class="badge bg-secondary">No</span>';
+    }
+    
+    if (value instanceof Date) {
+        return value.toLocaleDateString();
+    }
+    
+    if (typeof value === 'string') {
+        // Check if the string might be a date
+        if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+            try {
+                const date = new Date(value);
+                if (!isNaN(date.getTime())) {
+                    return date.toLocaleDateString();
+                }
+            } catch (e) {
+                // Not a valid date, continue with normal string handling
+            }
+        }
+        
+        // Format star ratings with actual stars if the column name suggests it
+        if (value.match(/^\d(\.\d)?$/) && value <= 5) {
+            const stars = parseFloat(value);
+            const fullStars = Math.floor(stars);
+            const halfStar = stars % 1 >= 0.5;
+            let html = '';
+            
+            // Add full stars
+            for (let i = 0; i < fullStars; i++) {
+                html += '<i class="bi bi-star-fill text-warning"></i>';
+            }
+            
+            // Add half star if needed
+            if (halfStar) {
+                html += '<i class="bi bi-star-half text-warning"></i>';
+            }
+            
+            // Add empty stars
+            const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+            for (let i = 0; i < emptyStars; i++) {
+                html += '<i class="bi bi-star text-warning"></i>';
+            }
+            
+            return html + ` (${stars})`;
+        }
+        
+        // For long text, truncate and add a tooltip
+        if (value.length > 100) {
+            return `<span title="${value.replace(/"/g, '&quot;')}">${value.substring(0, 100)}...</span>`;
+        }
+    }
+    
+    return value;
+}
+
+const improvedQueries = {
+    'top_businesses_by_category': `-- Find top businesses by category with rating and review count
+SELECT 
+    c.category_name,
+    b.business_name,
+    b.stars,
+    b.review_count,
+    l.city,
+    l.state
+FROM 
+    dim_business b
+    JOIN dim_location l ON b.location_id = l.location_id
+    JOIN business_category bc ON b.business_id = bc.business_id
+    JOIN dim_category c ON bc.category_id = c.category_id
+WHERE 
+    c.category_name = 'Restaurants'
+ORDER BY 
+    b.stars DESC, b.review_count DESC
+LIMIT 10;`,
+    
+    'rating_distribution_by_city': `-- Get rating distribution by city
+SELECT 
+    l.city,
+    l.state,
+    COUNT(DISTINCT b.business_id) as business_count,
+    AVG(b.stars) as avg_rating,
+    SUM(b.review_count) as total_reviews,
+    COUNT(CASE WHEN b.stars >= 4.5 THEN 1 END) as five_star_count,
+    COUNT(CASE WHEN b.stars >= 3.5 AND b.stars < 4.5 THEN 1 END) as four_star_count,
+    COUNT(CASE WHEN b.stars >= 2.5 AND b.stars < 3.5 THEN 1 END) as three_star_count,
+    COUNT(CASE WHEN b.stars >= 1.5 AND b.stars < 2.5 THEN 1 END) as two_star_count,
+    COUNT(CASE WHEN b.stars < 1.5 THEN 1 END) as one_star_count
+FROM 
+    dim_business b
+    JOIN dim_location l ON b.location_id = l.location_id
+GROUP BY 
+    l.city, l.state
+HAVING 
+    COUNT(DISTINCT b.business_id) > 10
+ORDER BY 
+    business_count DESC
+LIMIT 10;`,
+    
+    'review_volume_trend': `-- Review volume trend over time with month names
+SELECT 
+    t.year_actual AS Year,
+    t.month_actual AS Month,
+    t.month_name AS Month_Name,
+    COUNT(*) AS Review_Count,
+    AVG(r.stars) AS Average_Rating,
+    COUNT(DISTINCT r.business_id) AS Unique_Businesses,
+    COUNT(DISTINCT r.user_id) AS Unique_Users
+FROM 
+    fact_review r
+    JOIN dim_time t ON r.time_id = t.time_id
+WHERE 
+    t.year_actual >= 2020
+GROUP BY 
+    t.year_actual, t.month_actual, t.month_name
+ORDER BY 
+    t.year_actual, t.month_actual;`,
+    
+    'business_category_popularity': `-- Business category popularity with ranking
+SELECT 
+    c.category_name AS Category,
+    t.year_actual AS Year,
+    COUNT(DISTINCT b.business_id) AS Business_Count,
+    COUNT(DISTINCT r.review_id) AS Review_Count,
+    AVG(r.stars) AS Average_Rating,
+    RANK() OVER (
+        PARTITION BY t.year_actual 
+        ORDER BY COUNT(DISTINCT r.review_id) DESC
+    ) AS Popularity_Rank
+FROM 
+    fact_review r
+    JOIN dim_business b ON r.business_id = b.business_id
+    JOIN business_category bc ON b.business_id = bc.business_id
+    JOIN dim_category c ON bc.category_id = c.category_id
+    JOIN dim_time t ON r.time_id = t.time_id
+WHERE 
+    t.year_actual >= 2018
+GROUP BY 
+    c.category_name, t.year_actual
+HAVING 
+    COUNT(DISTINCT r.review_id) >= 50
+ORDER BY 
+    t.year_actual, Popularity_Rank
+LIMIT 25;`,
+    
+    'user_review_patterns': `-- User review patterns with enhanced metrics
+SELECT 
+    u.user_id,
+    u.name AS User_Name,
+    COUNT(r.review_id) AS Review_Count,
+    AVG(r.stars) AS Average_Rating,
+    MIN(t.date_actual) AS First_Review_Date,
+    MAX(t.date_actual) AS Last_Review_Date,
+    DATEDIFF(MAX(t.date_actual), MIN(t.date_actual)) AS Days_Active,
+    COUNT(DISTINCT b.business_id) AS Unique_Businesses,
+    COUNT(DISTINCT c.category_id) AS Unique_Categories,
+    COUNT(DISTINCT l.city) AS Cities_Reviewed,
+    COUNT(DISTINCT l.state) AS States_Reviewed,
+    SUM(r.useful_votes) AS Total_Useful_Votes,
+    AVG(r.useful_votes) AS Avg_Useful_Per_Review,
+    GROUP_CONCAT(DISTINCT c.category_name ORDER BY COUNT(r.review_id) DESC SEPARATOR ', ') AS Top_Categories
+FROM 
+    fact_review r
+    JOIN dim_user u ON r.user_id = u.user_id
+    JOIN dim_business b ON r.business_id = b.business_id
+    JOIN business_category bc ON b.business_id = bc.business_id
+    JOIN dim_category c ON bc.category_id = c.category_id
+    JOIN dim_time t ON r.time_id = t.time_id
+    JOIN dim_location l ON b.location_id = l.location_id
+GROUP BY 
+    u.user_id, u.name
+HAVING 
+    Review_Count >= 10
+ORDER BY 
+    Review_Count DESC
+LIMIT 10;`
+};
+
+
 
 // Format cell value for display
 function formatCellValue(value) {
@@ -2207,3 +2396,186 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Quick fix to add to your page
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("SQL Explorer fix loaded");
+    
+    // Fix the run query button - attach the event handler directly
+    const runQueryButton = document.getElementById('runSqlQuery');
+    if (runQueryButton) {
+        console.log("Found SQL query button, attaching handler");
+        runQueryButton.onclick = function() {
+            // Call the runSqlQuery function
+            console.log("Run SQL Query button clicked");
+            executeSqlQuery();
+        };
+    } else {
+        console.error("SQL query button not found!");
+    }
+});
+
+// Rename the function to avoid the naming conflict
+function executeSqlQuery() {
+    console.log("Executing SQL query");
+    const querySelect = document.getElementById('sqlQuerySelect');
+    const selectedQuery = querySelect.value;
+    
+    if (!selectedQuery) {
+        alert('Please select a query to run');
+        return;
+    }
+    
+    // Show loader
+    const resultsLoader = document.getElementById('sqlResultsLoader');
+    const resultsContainer = document.getElementById('sqlResultsContainer');
+    resultsLoader.classList.remove('d-none');
+    resultsContainer.innerHTML = '';
+    
+    // Start timer
+    const startTime = performance.now();
+    
+    // Improved endpoint mapping with better data handling
+    const endpointMap = {
+        'top_businesses_by_category': '/api/mysql/top_businesses?category=Restaurants&limit=10',
+        'rating_distribution_by_city': '/api/mysql/city_ratings',
+        'review_volume_trend': '/api/mysql/review_trends',
+        'business_category_popularity': '/api/mysql/category_trends?category=Restaurants',
+        'user_review_patterns': '/api/mysql/top_users'
+    };
+    
+    const endpoint = endpointMap[selectedQuery] || '/api/mysql/top_businesses?category=Restaurants&limit=10';
+    
+    console.log("Fetching data from endpoint:", endpoint);
+    
+    fetch(endpoint)
+        .then(response => {
+            console.log("Response status:", response.status);
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log("Data received:", data);
+            
+            // End timer
+            const endTime = performance.now();
+            const queryTime = ((endTime - startTime) / 1000).toFixed(2);
+            document.getElementById('queryTimeDisplay').textContent = `Query executed in ${queryTime} seconds`;
+            
+            // Process data for display based on query type
+            let resultHtml = '';
+            
+            // Enhanced data processing based on query type
+            switch (selectedQuery) {
+                case 'top_businesses_by_category':
+                    // Handle businesses data
+                    if (data.businesses && Array.isArray(data.businesses)) {
+                        resultHtml = createTableFromArray(data.businesses);
+                    } else if (Array.isArray(data)) {
+                        resultHtml = createTableFromArray(data);
+                    } else {
+                        resultHtml = '<div class="alert alert-info">No business data found</div>';
+                    }
+                    break;
+                    
+                case 'rating_distribution_by_city':
+                    // Handle city ratings data
+                    if (Array.isArray(data)) {
+                        resultHtml = createTableFromArray(data);
+                    } else {
+                        resultHtml = '<div class="alert alert-info">No city rating data found</div>';
+                    }
+                    break;
+                    
+                case 'review_volume_trend':
+                    // Transform time-series data into tabular format
+                    if (data.dates && data.review_counts) {
+                        const tableData = data.dates.map((date, index) => ({
+                            Date: date,
+                            'Review Count': data.review_counts[index],
+                            'Month': new Date(date).toLocaleString('default', { month: 'long' }),
+                            'Year': new Date(date).getFullYear()
+                        }));
+                        resultHtml = createTableFromArray(tableData);
+                    } else {
+                        resultHtml = '<div class="alert alert-info">No trend data found</div>';
+                    }
+                    break;
+                    
+                case 'business_category_popularity':
+                    // Transform category trend data
+                    if (data.periods && data.data && data.categories) {
+                        const categoryName = data.categories[0];
+                        const tableData = data.periods.map((period, index) => {
+                            // Extract year and quarter from period (format: "2023-Q1")
+                            const [year, quarter] = period.split('-');
+                            return {
+                                'Period': period,
+                                'Year': year,
+                                'Quarter': quarter,
+                                'Category': categoryName,
+                                'Review Count': data.data[categoryName][index]
+                            };
+                        });
+                        resultHtml = createTableFromArray(tableData);
+                    } else {
+                        resultHtml = '<div class="alert alert-info">No category trend data found</div>';
+                    }
+                    break;
+                    
+                case 'user_review_patterns':
+                    // Handle user patterns data - already in tabular format
+                    if (Array.isArray(data)) {
+                        // Improve the display of dates
+                        const processedData = data.map(user => {
+                            const processed = {...user};
+                            if (processed.first_review_date) {
+                                processed.first_review_date = new Date(processed.first_review_date).toLocaleDateString();
+                            }
+                            if (processed.last_review_date) {
+                                processed.last_review_date = new Date(processed.last_review_date).toLocaleDateString();
+                            }
+                            return processed;
+                        });
+                        resultHtml = createTableFromArray(processedData);
+                    } else {
+                        resultHtml = '<div class="alert alert-info">No user data found</div>';
+                    }
+                    break;
+                    
+                default:
+                    // Fallback for unhandled query types
+                    if (Array.isArray(data)) {
+                        resultHtml = createTableFromArray(data);
+                    } else if (typeof data === 'object') {
+                        // Find arrays in the data
+                        const arrayProps = Object.keys(data).filter(key => Array.isArray(data[key]));
+                        if (arrayProps.length > 0) {
+                            // Use the first array found
+                            resultHtml = createTableFromArray(data[arrayProps[0]]);
+                        } else {
+                            // Display as JSON if no array is found
+                            resultHtml = `<pre class="bg-light p-3">${JSON.stringify(data, null, 2)}</pre>`;
+                        }
+                    } else {
+                        resultHtml = `<pre class="bg-light p-3">${JSON.stringify(data, null, 2)}</pre>`;
+                    }
+            }
+            
+            resultsContainer.innerHTML = resultHtml;
+        })
+        .catch(error => {
+            console.error('Error running query:', error);
+            resultsContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <h5>Error executing query</h5>
+                    <p>${error.message}</p>
+                    <p>Please try another query or check the server connection.</p>
+                </div>`;
+        })
+        .finally(() => {
+            resultsLoader.classList.add('d-none');
+        });
+}
