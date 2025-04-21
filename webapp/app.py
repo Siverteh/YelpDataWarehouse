@@ -15,7 +15,7 @@ from utility_routes import utility_bp
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-here'
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching of static files
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # Register blueprints

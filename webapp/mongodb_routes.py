@@ -4,6 +4,7 @@ MongoDB-specific routes for the Yelp Data Warehouse API with improved location a
 from flask import Blueprint, jsonify, request
 import json
 from db_utils import get_mongodb_connection, logger
+import traceback
 
 # Create Blueprint for MongoDB routes
 mongodb_bp = Blueprint('mongodb', __name__, url_prefix='/api/mongodb')

@@ -252,7 +252,7 @@ function formatStarRating(stars) {
         html += '<i class="bi bi-star text-warning"></i>';
     }
     
-    return html;
+    return html + ` (${parseFloat(stars).toFixed(1)})`;
 }
 
 // Clear search form
@@ -271,108 +271,142 @@ function clearMySQLSearch() {
 
 // Load business reviews
 async function loadBusinessReviews(businessId, page = 1, sort = 'date_desc') {
+    console.log(`Loading reviews for business: ${businessId}, page: ${page}, sort: ${sort}`);
     const limit = 5; // Reviews per page
     
-    document.getElementById('reviewsLoader').classList.remove('d-none');
-    document.getElementById('reviewsList').innerHTML = '';
+    // Make sure the loader element exists before trying to access it
+    const loaderElement = document.getElementById('reviewsLoader');
+    if (loaderElement) {
+        loaderElement.classList.remove('d-none');
+    }
+    
+    // Clear existing reviews
+    const reviewsListElement = document.getElementById('reviewsList');
+    if (reviewsListElement) {
+        reviewsListElement.innerHTML = '';
+    }
     
     try {
         const response = await fetch(`/api/mysql/business_reviews?business_id=${encodeURIComponent(businessId)}&page=${page}&limit=${limit}&sort=${sort}`);
+        
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         
-        const reviews = data.reviews || [];
-        const pagination = data.pagination || { total: reviews.length, page: 1, limit: limit, pages: 1 };
+        // Debug the response data
+        console.log("Reviews data received:", data);
         
-        if (reviews.length === 0) {
-            document.getElementById('reviewsList').innerHTML = '<div class="alert alert-info">No reviews found for this business.</div>';
-        } else {
-            let reviewsHtml = '';
-            
-            reviews.forEach(review => {
-                // Format date
-                const reviewDate = new Date(review.review_date);
-                const formattedDate = reviewDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        // Handle both array and object responses
+        const reviews = Array.isArray(data) ? data : (data.reviews || []);
+        const pagination = data.pagination || { 
+            total: reviews.length, 
+            page: page, 
+            limit: limit, 
+            pages: Math.ceil(reviews.length / limit) 
+        };
+        
+        if (reviewsListElement) {
+            if (reviews.length === 0) {
+                reviewsListElement.innerHTML = '<div class="alert alert-info">No reviews found for this business.</div>';
+            } else {
+                let reviewsHtml = '';
                 
-                // Generate stars display
-                const starsHtml = generateStarsHtml(review.stars);
-                
-                reviewsHtml += `
-                    <div class="card mb-3">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <div>
-                                    <h6 class="mb-0">${review.user_name || 'Anonymous'}</h6>
-                                    <div class="text-muted small">${formattedDate}</div>
+                reviews.forEach(review => {
+                    // Format date
+                    let reviewDate = 'N/A';
+                    if (review.review_date) {
+                        const date = new Date(review.review_date);
+                        reviewDate = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                    }
+                    
+                    // Generate stars display
+                    const starsHtml = formatStarRating(review.stars);
+                    
+                    reviewsHtml += `
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        <h6 class="mb-0">${review.user_name || 'Anonymous'}</h6>
+                                        <div class="text-muted small">${reviewDate}</div>
+                                    </div>
+                                    <div>
+                                        ${starsHtml}
+                                    </div>
                                 </div>
-                                <div>
-                                    ${starsHtml}
-                                </div>
-                            </div>
-                            <p class="mb-1">${review.text || 'No review text available.'}</p>
-                            <div class="d-flex mt-2 text-muted small">
-                                <div class="me-3">
-                                    <i class="bi bi-hand-thumbs-up"></i> ${review.useful_votes || 0} Useful
-                                </div>
-                                <div class="me-3">
-                                    <i class="bi bi-emoji-smile"></i> ${review.funny_votes || 0} Funny
-                                </div>
-                                <div>
-                                    <i class="bi bi-star"></i> ${review.cool_votes || 0} Cool
+                                <p class="mb-1">${review.text || 'No review text available.'}</p>
+                                <div class="d-flex mt-2 text-muted small">
+                                    <div class="me-3">
+                                        <i class="bi bi-hand-thumbs-up"></i> ${review.useful_votes || 0} Useful
+                                    </div>
+                                    <div class="me-3">
+                                        <i class="bi bi-emoji-smile"></i> ${review.funny_votes || 0} Funny
+                                    </div>
+                                    <div>
+                                        <i class="bi bi-star"></i> ${review.cool_votes || 0} Cool
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                `;
-            });
-            
-            document.getElementById('reviewsList').innerHTML = reviewsHtml;
-            
-            // Generate pagination
-            if (pagination.pages > 1) {
-                let paginationHtml = '';
+                    `;
+                });
                 
-                // Previous button
-                paginationHtml += `
-                    <li class="page-item ${pagination.page <= 1 ? 'disabled' : ''}">
-                        <a class="page-link" href="#" onclick="event.preventDefault(); ${pagination.page > 1 ? 'loadBusinessReviews(\'' + businessId + '\', ' + (pagination.page - 1) + ', \'' + sort + '\')' : ''}">Previous</a>
-                    </li>
-                `;
+                reviewsListElement.innerHTML = reviewsHtml;
                 
-                // Page numbers
-                const startPage = Math.max(1, pagination.page - 2);
-                const endPage = Math.min(pagination.pages, pagination.page + 2);
-                
-                for (let i = startPage; i <= endPage; i++) {
+                // Generate pagination
+                const paginationElement = document.getElementById('reviewsPagination');
+                if (paginationElement && pagination.pages > 1) {
+                    let paginationHtml = '';
+                    
+                    // Previous button
                     paginationHtml += `
-                        <li class="page-item ${i === pagination.page ? 'active' : ''}">
-                            <a class="page-link" href="#" onclick="event.preventDefault(); loadBusinessReviews('${businessId}', ${i}, '${sort}')">${i}</a>
+                        <li class="page-item ${pagination.page <= 1 ? 'disabled' : ''}">
+                            <a class="page-link" href="#" onclick="event.preventDefault(); ${pagination.page > 1 ? 'loadBusinessReviews(\'' + businessId + '\', ' + (pagination.page - 1) + ', \'' + sort + '\')' : ''}">Previous</a>
                         </li>
                     `;
+                    
+                    // Page numbers
+                    const startPage = Math.max(1, pagination.page - 2);
+                    const endPage = Math.min(pagination.pages, pagination.page + 2);
+                    
+                    for (let i = startPage; i <= endPage; i++) {
+                        paginationHtml += `
+                            <li class="page-item ${i === pagination.page ? 'active' : ''}">
+                                <a class="page-link" href="#" onclick="event.preventDefault(); loadBusinessReviews('${businessId}', ${i}, '${sort}');">${i}</a>
+                            </li>
+                        `;
+                    }
+                    
+                    // Next button
+                    paginationHtml += `
+                        <li class="page-item ${pagination.page >= pagination.pages ? 'disabled' : ''}">
+                            <a class="page-link" href="#" onclick="event.preventDefault(); ${pagination.page < pagination.pages ? 'loadBusinessReviews(\'' + businessId + '\', ' + (pagination.page + 1) + ', \'' + sort + '\')' : ''}">Next</a>
+                        </li>
+                    `;
+                    
+                    paginationElement.innerHTML = `
+                        <nav>
+                            <ul class="pagination justify-content-center">
+                                ${paginationHtml}
+                            </ul>
+                        </nav>
+                    `;
+                } else if (paginationElement) {
+                    paginationElement.innerHTML = '';
                 }
-                
-                // Next button
-                paginationHtml += `
-                    <li class="page-item ${pagination.page >= pagination.pages ? 'disabled' : ''}">
-                        <a class="page-link" href="#" onclick="event.preventDefault(); ${pagination.page < pagination.pages ? 'loadBusinessReviews(\'' + businessId + '\', ' + (pagination.page + 1) + ', \'' + sort + '\')' : ''}">Next</a>
-                    </li>
-                `;
-                
-                document.getElementById('reviewsPagination').innerHTML = `
-                    <nav>
-                        <ul class="pagination justify-content-center">
-                            ${paginationHtml}
-                        </ul>
-                    </nav>
-                `;
-            } else {
-                document.getElementById('reviewsPagination').innerHTML = '';
             }
         }
     } catch (error) {
         console.error('Error loading reviews:', error);
-        document.getElementById('reviewsList').innerHTML = '<div class="alert alert-danger">Error loading reviews. Please try again.</div>';
+        if (reviewsListElement) {
+            reviewsListElement.innerHTML = `<div class="alert alert-danger">Error loading reviews: ${error.message}</div>`;
+        }
     } finally {
-        document.getElementById('reviewsLoader').classList.add('d-none');
+        if (loaderElement) {
+            loaderElement.classList.add('d-none');
+        }
     }
 }
 
@@ -473,8 +507,11 @@ async function loadCheckinAnalysis(businessId) {
     }
 }
 
-// Enhanced business details
+// Updated showMySQLBusinessDetails function
 async function showMySQLBusinessDetails(businessId, businessName) {
+    console.log(`Loading details for business: ${businessId}, name: ${businessName}`);
+    
+    // Display the business details card
     const businessDetails = document.getElementById('mysqlBusinessDetails');
     businessDetails.classList.remove('d-none');
     businessDetails.setAttribute('data-business-id', businessId);
@@ -482,13 +519,19 @@ async function showMySQLBusinessDetails(businessId, businessName) {
     
     try {
         const response = await fetch(`/api/mysql/business_performance?business_id=${encodeURIComponent(businessId)}`);
+        
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log("Business performance data:", data);
         
         // Update business details
         const business = data.business;
-        document.getElementById('mysqlBusinessDetailsLocation').textContent = `${business.city}, ${business.state}`;
+        document.getElementById('mysqlBusinessDetailsLocation').textContent = `${business.city || 'N/A'}, ${business.state || 'N/A'}`;
         document.getElementById('mysqlBusinessDetailsRating').innerHTML = `${formatStarRating(business.stars)} (${business.avg_rating ? business.avg_rating.toFixed(1) : 'N/A'} avg)`;
-        document.getElementById('mysqlBusinessDetailsReviews').textContent = business.review_count || business.total_reviews || 'N/A';
+        document.getElementById('mysqlBusinessDetailsReviews').textContent = formatNumber(business.review_count || business.total_reviews || 0);
         
         // Improved checkins count calculation
         // Calculate total checkins from the checkins_by_month data if available
@@ -503,7 +546,7 @@ async function showMySQLBusinessDetails(businessId, businessName) {
         }
         
         document.getElementById('mysqlBusinessDetailsCheckins').textContent = 
-            totalCheckins > 0 ? totalCheckins : 'No checkins recorded';
+            totalCheckins > 0 ? formatNumber(totalCheckins) : 'No checkins recorded';
         
         // Create chart for reviews and checkins by month
         const reviewsData = data.reviews_by_month || [];
@@ -616,15 +659,74 @@ async function showMySQLBusinessDetails(businessId, businessName) {
             }
         });
         
-        // Load reviews (will be shown when reviews tab is clicked)
+        // Load reviews for the Reviews tab
+        // We'll preload reviews in the background
         loadBusinessReviews(businessId);
         
-        // Load checkin analysis
+        // Also load the checkin analysis
         loadCheckinAnalysis(businessId);
         
     } catch (error) {
         console.error('Error loading business details:', error);
+        
+        // Show error message
+        const errorHtml = `
+            <div class="alert alert-danger">
+                <h5>Error loading business details</h5>
+                <p>${error.message}</p>
+            </div>
+        `;
+        
+        // Add error message to the main content area
+        const mainContent = document.getElementById('performance-content');
+        if (mainContent) {
+            mainContent.innerHTML = errorHtml;
+        }
     }
+}
+
+// Updated loadTopCitiesTable function that uses real data
+function loadTopCitiesTable() {
+    const tableBody = document.getElementById('mysqlTopCitiesTable').querySelector('tbody');
+    const stateFilter = document.getElementById('stateFilterSelect').value;
+    
+    // Show loading indicator
+    tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Loading data...</td></tr>';
+    
+    // Build query parameters for API call
+    const params = new URLSearchParams();
+    if (stateFilter) params.append('state', stateFilter);
+    params.append('limit', 20);
+    
+    // Make API call to get real data instead of dummy data
+    fetch(`/api/mysql/city_ratings?${params.toString()}`)
+        .then(response => response.json())
+        .then(cities => {
+            // Clear existing rows
+            tableBody.innerHTML = '';
+            
+            if (!cities || cities.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No data available</td></tr>';
+                return;
+            }
+            
+            // Add rows to table using real data
+            cities.forEach(city => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${city.city || 'N/A'}</td>
+                    <td>${city.state || 'N/A'}</td>
+                    <td>${city.business_count || 0}</td>
+                    <td>${(city.avg_rating || 0).toFixed(1)}</td>
+                    <td>${formatNumber(city.total_reviews || 0)}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading city data:', error);
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Error loading data</td></tr>';
+        });
 }
 
 // Enhanced MySQL analytics with multiple chart types
@@ -670,22 +772,33 @@ async function loadMySQLAnalytics() {
             }
         });
         
-        // Monthly distribution chart (use dummy data for now)
+        // Monthly distribution chart (use API data if available)
+        const monthlyResponse = await fetch('/api/mysql/monthly_distribution');
+        let monthlyData;
+        
+        try {
+            monthlyData = await monthlyResponse.json();
+        } catch (e) {
+            // Fallback to synthetic data if API fails
+            const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            monthlyData = {
+                labels: monthLabels,
+                data: [65, 72, 85, 93, 105, 110, 95, 92, 88, 79, 82, 90]
+            };
+        }
+        
         const monthlyDistributionCtx = document.getElementById('mysqlMonthlyDistributionChart').getContext('2d');
         if (mysqlMonthlyDistributionChart) {
             mysqlMonthlyDistributionChart.destroy();
         }
         
-        const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const monthlyData = [65, 72, 85, 93, 105, 110, 95, 92, 88, 79, 82, 90]; // Dummy data
-        
         mysqlMonthlyDistributionChart = new Chart(monthlyDistributionCtx, {
             type: 'bar',
             data: {
-                labels: monthLabels,
+                labels: monthlyData.labels,
                 datasets: [{
                     label: 'Average Monthly Reviews',
-                    data: monthlyData,
+                    data: monthlyData.data,
                     backgroundColor: 'rgba(46, 204, 113, 0.7)'
                 }]
             },
@@ -708,7 +821,7 @@ async function loadMySQLAnalytics() {
         mysqlYearComparisonChart = new Chart(yearComparisonCtx, {
             type: 'line',
             data: {
-                labels: monthLabels,
+                labels: monthlyData.labels,
                 datasets: [
                     {
                         label: '2022',
@@ -797,6 +910,27 @@ async function loadMySQLAnalytics() {
             }
         });
         
+        // IMPORTANT: Set up the event handler for category trend select
+        const categoryTrendSelect = document.getElementById('categoryTrendSelect');
+        if (categoryTrendSelect) {
+            // Clear the previous event listener if any
+            const newCategoryTrendSelect = categoryTrendSelect.cloneNode(true);
+            categoryTrendSelect.parentNode.replaceChild(newCategoryTrendSelect, categoryTrendSelect);
+            
+            // Add the new event listener
+            newCategoryTrendSelect.addEventListener('change', function() {
+                const selectedCategory = this.value;
+                if (selectedCategory) {
+                    loadCategoryTrends(selectedCategory);
+                }
+            });
+            
+            // If there's a selected category, load its data
+            if (newCategoryTrendSelect.value) {
+                loadCategoryTrends(newCategoryTrendSelect.value);
+            }
+        }
+        
         // State data charts (dummy data)
         const stateCountCtx = document.getElementById('mysqlStateCountChart').getContext('2d');
         if (mysqlStateCountChart) {
@@ -854,7 +988,7 @@ async function loadMySQLAnalytics() {
             }
         });
         
-        // Load dummy top cities data
+        // Load top cities table with real data
         loadTopCitiesTable();
         
     } catch (error) {
@@ -862,47 +996,95 @@ async function loadMySQLAnalytics() {
     }
 }
 
-// Load top cities table with dummy data
-function loadTopCitiesTable() {
-    const tableBody = document.getElementById('mysqlTopCitiesTable').querySelector('tbody');
+// Add this function to load category trend data
+function loadCategoryTrends(category) {
+    console.log(`Loading trends for category: ${category}`);
+    const ctx = document.getElementById('mysqlCategoryTrendChart').getContext('2d');
     
-    // Clear existing rows
-    tableBody.innerHTML = '';
+    // Show loading indicator
+    const chartContainer = ctx.canvas.parentNode;
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'text-center my-3';
+    loadingIndicator.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
     
-    // Dummy data
-    const dummyCities = [
-        { city: 'Philadelphia', state: 'PA', count: 450, rating: 4.1, reviews: 15200 },
-        { city: 'Pittsburgh', state: 'PA', count: 380, rating: 3.9, reviews: 12800 },
-        { city: 'Las Vegas', state: 'NV', count: 920, rating: 4.3, reviews: 48000 },
-        { city: 'Phoenix', state: 'AZ', count: 680, rating: 4.0, reviews: 25600 },
-        { city: 'Scottsdale', state: 'AZ', count: 420, rating: 4.2, reviews: 16800 },
-        { city: 'Los Angeles', state: 'CA', count: 580, rating: 4.1, reviews: 35000 },
-        { city: 'San Francisco', state: 'CA', count: 520, rating: 4.2, reviews: 32000 },
-        { city: 'Cleveland', state: 'OH', count: 340, rating: 3.8, reviews: 11500 },
-        { city: 'Columbus', state: 'OH', count: 320, rating: 3.9, reviews: 10800 },
-        { city: 'Cincinnati', state: 'OH', count: 290, rating: 3.7, reviews: 9800 }
-    ];
+    // Insert loading indicator before canvas
+    if (!document.getElementById('categoryTrendLoading')) {
+        loadingIndicator.id = 'categoryTrendLoading';
+        chartContainer.insertBefore(loadingIndicator, ctx.canvas);
+    }
     
-    // Get selected state filter
-    const stateFilter = document.getElementById('stateFilterSelect').value;
+    // If there's an existing chart, destroy it
+    if (mysqlCategoryTrendChart) {
+        mysqlCategoryTrendChart.destroy();
+    }
     
-    // Filter cities by state if a state is selected
-    const filteredCities = stateFilter ? 
-        dummyCities.filter(city => city.state === stateFilter) : 
-        dummyCities;
-    
-    // Add rows to table
-    filteredCities.forEach(city => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${city.city}</td>
-            <td>${city.state}</td>
-            <td>${city.count}</td>
-            <td>${city.rating.toFixed(1)}</td>
-            <td>${city.reviews.toLocaleString()}</td>
-        `;
-        tableBody.appendChild(row);
-    });
+    // Fetch real data from the API
+    fetch(`/api/mysql/category_trends?category=${encodeURIComponent(category)}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`API returned ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log("Received category trend data:", data);
+            
+            // Remove loading indicator
+            const loadingElem = document.getElementById('categoryTrendLoading');
+            if (loadingElem) {
+                loadingElem.remove();
+            }
+            
+            // Check if we got valid data
+            if (!data.periods || !data.data || !data.data[category]) {
+                throw new Error('Invalid data received from API');
+            }
+            
+            // Create the chart with real data
+            mysqlCategoryTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.periods,
+                    datasets: [{
+                        label: `${category} Reviews`,
+                        data: data.data[category],
+                        borderColor: '#d32323',
+                        backgroundColor: 'rgba(211, 35, 35, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Performance Trend for ${category}`
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error loading category trends:', error);
+            // Remove loading indicator
+            const loadingElem = document.getElementById('categoryTrendLoading');
+            if (loadingElem) {
+                loadingElem.remove();
+            }
+            
+            // Show error message
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'alert alert-danger';
+            errorDiv.textContent = 'Error loading category trend data. Please try again.';
+            chartContainer.innerHTML = '';
+            chartContainer.appendChild(errorDiv);
+        });
 }
 
 // Handle SQL query selection
@@ -1185,7 +1367,7 @@ function initializeMySQLEventListeners() {
         }
     });
     
-    // Business details tabs
+    // Business details tabs - THIS IS THE KEY FIX
     document.getElementById('reviews-tab')?.addEventListener('click', function() {
         const businessDetails = document.getElementById('mysqlBusinessDetails');
         const businessId = businessDetails.getAttribute('data-business-id');
@@ -1234,9 +1416,55 @@ document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('sqlQuerySelect')) {
         handleSqlQuerySelection();
     }
-});
-
-
-document.getElementById('mysql-businesses-tab').addEventListener('shown.bs.tab', function() {
-    searchMySQLBusinesses(1);
+    
+    // Add event listener for the mysql-businesses-tab to auto-load businesses
+    document.getElementById('mysql-businesses-tab')?.addEventListener('shown.bs.tab', function() {
+        searchMySQLBusinesses(1);
+    });
+    
+    // Add event listener for the mysql-analytics-tab to preload analytics data
+    document.getElementById('mysql-analytics-tab')?.addEventListener('shown.bs.tab', function() {
+        loadMySQLAnalytics();
+    });
+    
+    // Make sure the CategoryTrendSelect change event is properly bound
+    document.getElementById('categoryTrendSelect')?.addEventListener('change', function() {
+        const selectedCategory = this.value;
+        if (selectedCategory) {
+            loadCategoryTrends(selectedCategory);
+        }
+    });
+    
+    // Make sure we're using the real implementation of formatStarRating
+    // Add it here as a fallback in case it's missing
+    if (typeof formatStarRating !== 'function') {
+        window.formatStarRating = function(stars) {
+            if (stars === undefined || stars === null) return 'N/A';
+            
+            // Convert to number if it's a string
+            stars = parseFloat(stars);
+            
+            const fullStars = Math.floor(stars);
+            const halfStar = stars % 1 >= 0.5;
+            let html = '';
+            
+            // Add full stars
+            for (let i = 0; i < fullStars; i++) {
+                html += '<i class="bi bi-star-fill text-warning"></i>';
+            }
+            
+            // Add half star if needed
+            if (halfStar) {
+                html += '<i class="bi bi-star-half text-warning"></i>';
+            }
+            
+            // Add empty stars
+            const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+            for (let i = 0; i < emptyStars; i++) {
+                html += '<i class="bi bi-star text-warning"></i>';
+            }
+            
+            return html + ` (${parseFloat(stars).toFixed(1)})`;
+        };
+    }
 });

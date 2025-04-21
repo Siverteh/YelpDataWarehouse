@@ -322,6 +322,7 @@ def mysql_business_checkins():
         }
         return jsonify(dummy_data)
 
+
 @mysql_bp.route('/city_ratings')
 def mysql_city_ratings():
     """Get rating distribution by city"""
@@ -330,16 +331,7 @@ def mysql_city_ratings():
     
     conn = get_mysql_connection()
     if not conn:
-        # Return dummy data
-        dummy_data = [
-            {"city": "Las Vegas", "state": "NV", "business_count": 450, "avg_rating": 4.2, "total_reviews": 25000, 
-             "five_star_count": 200, "four_star_count": 150, "three_star_count": 75, "two_star_count": 20, "one_star_count": 5},
-            {"city": "Phoenix", "state": "AZ", "business_count": 350, "avg_rating": 4.0, "total_reviews": 18000,
-             "five_star_count": 150, "four_star_count": 120, "three_star_count": 60, "two_star_count": 15, "one_star_count": 5},
-            {"city": "Philadelphia", "state": "PA", "business_count": 300, "avg_rating": 3.9, "total_reviews": 15000,
-             "five_star_count": 120, "four_star_count": 100, "three_star_count": 60, "two_star_count": 15, "one_star_count": 5}
-        ]
-        return jsonify(dummy_data)
+        return jsonify([]), 503
     
     try:
         cursor = conn.cursor()
@@ -394,17 +386,7 @@ def mysql_city_ratings():
         if conn:
             conn.close()
         logger.error(f"Error in mysql_city_ratings: {str(e)}")
-        
-        # Return dummy data on error
-        dummy_data = [
-            {"city": "Las Vegas", "state": "NV", "business_count": 450, "avg_rating": 4.2, "total_reviews": 25000, 
-             "five_star_count": 200, "four_star_count": 150, "three_star_count": 75, "two_star_count": 20, "one_star_count": 5},
-            {"city": "Phoenix", "state": "AZ", "business_count": 350, "avg_rating": 4.0, "total_reviews": 18000,
-             "five_star_count": 150, "four_star_count": 120, "three_star_count": 60, "two_star_count": 15, "one_star_count": 5},
-            {"city": "Philadelphia", "state": "PA", "business_count": 300, "avg_rating": 3.9, "total_reviews": 15000,
-             "five_star_count": 120, "four_star_count": 100, "three_star_count": 60, "two_star_count": 15, "one_star_count": 5}
-        ]
-        return jsonify(dummy_data)
+        return jsonify([]), 500  # Return empty array instead of dummy data
 
 @mysql_bp.route('/business_performance')
 def mysql_business_performance():
@@ -839,39 +821,74 @@ def mysql_category_ratings():
 @mysql_bp.route('/category_trends')
 def mysql_category_trends():
     """Get category trends over time"""
+    category = request.args.get('category')
+    
+    if not category:
+        return jsonify({"error": "Category parameter is required"}), 400
+        
+    conn = get_mysql_connection()
+    if not conn:
+        return jsonify({"error": "Failed to connect to database"}), 503
+        
     try:
-        # Return dummy data
-        periods = ["2020-Q1", "2020-Q2", "2020-Q3", "2020-Q4", 
-                  "2021-Q1", "2021-Q2", "2021-Q3", "2021-Q4",
-                  "2022-Q1", "2022-Q2", "2022-Q3", "2022-Q4"]
+        cursor = conn.cursor()
         
-        categories = ["Restaurants", "Shopping", "Food", "Beauty & Spas", "Home Services"]
+        # Get quarterly data for the selected category
+        query = """
+            SELECT 
+                CONCAT(t.year_actual, '-Q', t.quarter_actual) as period,
+                COUNT(r.review_id) as review_count,
+                AVG(r.stars) as avg_rating
+            FROM 
+                fact_review r
+                JOIN dim_business b ON r.business_id = b.business_id
+                JOIN business_category bc ON b.business_id = bc.business_id
+                JOIN dim_category c ON bc.category_id = c.category_id
+                JOIN dim_time t ON r.time_id = t.time_id
+            WHERE 
+                c.category_name = %s
+                AND t.year_actual >= 2020
+            GROUP BY 
+                t.year_actual, t.quarter_actual
+            ORDER BY 
+                t.year_actual, t.quarter_actual
+        """
         
-        # Generate random data for each category
-        category_data = {}
-        for category in categories:
-            # Random starting value between 30-100
-            base_value = random.randint(30, 100)
-            # Generate trend with some randomness
-            trend = []
-            for i in range(len(periods)):
-                # Add some random variance but maintain an upward trend
-                value = base_value + (i * random.randint(3, 10)) + random.randint(-5, 15)
-                trend.append(value)
-            category_data[category] = trend
+        cursor.execute(query, (category,))
+        results = cursor.fetchall()
         
-        dummy_data = {
+        # Format data for chart
+        periods = []
+        data = []
+        
+        for row in results:
+            periods.append(row['period'])
+            data.append(row['review_count'])
+        
+        # If no data found, provide some recent quarters as placeholders
+        if not periods:
+            current_year = datetime.now().year
+            periods = [f"{current_year-1}-Q1", f"{current_year-1}-Q2", 
+                       f"{current_year-1}-Q3", f"{current_year-1}-Q4", 
+                       f"{current_year}-Q1", f"{current_year}-Q2"]
+            data = [0] * len(periods)
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
             "periods": periods,
-            "categories": categories,
-            "data": category_data
-        }
-        
-        return jsonify(dummy_data)
+            "categories": [category],
+            "data": {
+                category: data
+            }
+        })
+            
     except Exception as e:
+        if conn:
+            conn.close()
         logger.error(f"Error in mysql_category_trends: {str(e)}")
-        
-        # Return simple error fallback
-        return jsonify({"error": "Unable to load category trends data"}), 500
+        return jsonify({"error": str(e)}), 500
 
 @mysql_bp.route('/top_users')
 def mysql_top_users():

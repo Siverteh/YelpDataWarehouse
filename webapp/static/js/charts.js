@@ -59,6 +59,8 @@ function createBarChart(ctx, labels, data, title = null, yAxisMax = null) {
             }]
         },
         options: {
+            animation: false,
+            responsiveAnimationDuration: 0,
             responsive: true,
             plugins: {
                 title: {
@@ -90,6 +92,8 @@ function createPieChart(ctx, labels, data, title = null) {
             }]
         },
         options: {
+            animation: false,
+            responsiveAnimationDuration: 0,
             responsive: true,
             plugins: {
                 title: {
@@ -110,7 +114,7 @@ function createLineChart(ctx, labels, datasets, title = null) {
             borderColor: dataset.borderColor || lineChartColors[colorIndex].borderColor,
             backgroundColor: dataset.backgroundColor || lineChartColors[colorIndex].backgroundColor,
             fill: dataset.fill !== undefined ? dataset.fill : true,
-            tension: dataset.tension !== undefined ? dataset.tension : 0.1
+            tension: 0 // Set tension to 0 to remove curve animation
         };
     });
     
@@ -121,6 +125,8 @@ function createLineChart(ctx, labels, datasets, title = null) {
             datasets: formattedDatasets
         },
         options: {
+            animation: false,
+            responsiveAnimationDuration: 0,
             responsive: true,
             plugins: {
                 title: {
