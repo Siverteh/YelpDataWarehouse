@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Kafka Consumer for Yelp Data Warehouse
+Enhanced Kafka Consumer for Yelp Data Warehouse
 Processes messages from Kafka topics and updates all database systems.
+This version handles business and user creation messages too.
 """
 
 import os
@@ -19,7 +20,8 @@ class YelpKafkaConsumer:
     Consumer that processes Yelp data events from Kafka topics and loads them into databases.
     """
     
-    def __init__(self, bootstrap_servers='kafka:9092', topics=['yelp-reviews', 'yelp-checkins']):
+    def __init__(self, bootstrap_servers='kafka:9092', 
+                 topics=['yelp-reviews', 'yelp-checkins', 'yelp-businesses', 'yelp-users']):
         """Initialize Kafka consumer and database connections."""
         print(f"Initializing Kafka consumer with bootstrap servers: {bootstrap_servers}")
         self.consumer = KafkaConsumer(
@@ -133,24 +135,42 @@ class YelpKafkaConsumer:
                 
                 # Process message based on topic
                 if topic == 'yelp-reviews':
-                    if self.mysql_conn:
+                    if self.mysql_conn is not None:
                         self._process_review_mysql(value)
-                    if self.mongodb_db:
+                    if self.mongodb_db is not None:
                         self._process_review_mongodb(value)
-                    if self.neo4j_driver:
+                    if self.neo4j_driver is not None:
                         with self.neo4j_driver.session() as session:
                             self._process_review_neo4j(session, value)
                             
                 elif topic == 'yelp-checkins':
-                    if self.mysql_conn:
+                    if self.mysql_conn is not None:
                         self._process_checkin_mysql(value)
-                    if self.mongodb_db:
+                    if self.mongodb_db is not None:
                         self._process_checkin_mongodb(value)
-                    if self.neo4j_driver:
+                    if self.neo4j_driver is not None:
                         with self.neo4j_driver.session() as session:
                             self._process_checkin_neo4j(session, value)
                 
-                print(f"Processed {topic} message for business {value.get('business_id', '')}")
+                elif topic == 'yelp-businesses':
+                    if self.mysql_conn is not None:
+                        self._process_business_mysql(value)
+                    if self.mongodb_db is not None:
+                        self._process_business_mongodb(value)
+                    if self.neo4j_driver is not None:
+                        with self.neo4j_driver.session() as session:
+                            self._process_business_neo4j(session, value)
+                
+                elif topic == 'yelp-users':
+                    if self.mysql_conn is not None:
+                        self._process_user_mysql(value)
+                    if self.mongodb_db is not None:
+                        self._process_user_mongodb(value)
+                    if self.neo4j_driver is not None:
+                        with self.neo4j_driver.session() as session:
+                            self._process_user_neo4j(session, value)
+                
+                print(f"Processed {topic} message for {value.get('business_id', value.get('user_id', 'unknown'))}")
                 
         except KeyboardInterrupt:
             print("Message processing stopped by user")
@@ -174,6 +194,160 @@ class YelpKafkaConsumer:
             
     # Database-specific message processing methods
     
+    def _process_business_mysql(self, business):
+        """Process a business message for MySQL."""
+        if not self.mysql_conn:
+            return
+        
+        cursor = self.mysql_conn.cursor()
+        
+        try:
+            # First, check if the location exists
+            cursor.execute("""
+                SELECT location_id FROM dim_location 
+                WHERE city = %s AND state = %s AND postal_code = %s
+            """, (
+                business.get('city', ''),
+                business.get('state', ''),
+                business.get('postal_code', '')
+            ))
+            
+            location = cursor.fetchone()
+            
+            if location:
+                location_id = location['location_id']
+            else:
+                # Insert new location
+                cursor.execute("""
+                    INSERT INTO dim_location (city, state, postal_code, latitude, longitude)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    business.get('city', ''),
+                    business.get('state', ''),
+                    business.get('postal_code', ''),
+                    business.get('latitude'),
+                    business.get('longitude')
+                ))
+                
+                # Get the newly created location_id
+                cursor.execute("SELECT LAST_INSERT_ID() as location_id")
+                location_id = cursor.fetchone()['location_id']
+            
+            # Insert business
+            cursor.execute("""
+                INSERT IGNORE INTO dim_business 
+                (business_id, business_name, location_id, stars, review_count, is_open)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                business['business_id'],
+                business['name'],
+                location_id,
+                business.get('stars', 0),
+                business.get('review_count', 0),
+                business.get('is_open', 1)
+            ))
+            
+            # Process categories if present
+            if 'categories' in business and business['categories']:
+                categories = business['categories'].split(',')
+                
+                for category in categories:
+                    category = category.strip()
+                    if not category:
+                        continue
+                    
+                    # Check if category exists
+                    cursor.execute("SELECT category_id FROM dim_category WHERE category_name = %s", (category,))
+                    category_row = cursor.fetchone()
+                    
+                    if category_row:
+                        category_id = category_row['category_id']
+                    else:
+                        # Insert new category
+                        cursor.execute("INSERT INTO dim_category (category_name) VALUES (%s)", (category,))
+                        cursor.execute("SELECT LAST_INSERT_ID() as category_id")
+                        category_id = cursor.fetchone()['category_id']
+                    
+                    # Link business to category
+                    cursor.execute("""
+                        INSERT IGNORE INTO business_category (business_id, category_id)
+                        VALUES (%s, %s)
+                    """, (business['business_id'], category_id))
+            
+            # Create summary entry for the business
+            cursor.execute("""
+                INSERT IGNORE INTO summary_business_performance 
+                (business_id, total_reviews, avg_rating, total_checkins, total_tips)
+                VALUES (%s, 0, 0, 0, 0)
+            """, (business['business_id'],))
+            
+            # Commit the transaction
+            self.mysql_conn.commit()
+            
+            # Broadcast the event
+            self._broadcast_event('mysql', 'business', {
+                'business_id': business['business_id'],
+                'name': business['name'],
+                'city': business.get('city', ''),
+                'state': business.get('state', '')
+            })
+            
+            print(f"MySQL: Added business {business['name']} (ID: {business['business_id']})")
+        
+        except Exception as e:
+            print(f"Error processing business in MySQL: {e}")
+            self.mysql_conn.rollback()
+        finally:
+            cursor.close()
+    
+    def _process_user_mysql(self, user):
+        """Process a user message for MySQL."""
+        if not self.mysql_conn:
+            return
+        
+        cursor = self.mysql_conn.cursor()
+        
+        try:
+            # Parse yelping_since if present
+            yelping_since = None
+            if 'yelping_since' in user:
+                try:
+                    yelping_since = datetime.strptime(user['yelping_since'], '%Y-%m-%d')
+                except:
+                    pass
+            
+            # Insert user
+            cursor.execute("""
+                INSERT IGNORE INTO dim_user 
+                (user_id, name, review_count, yelping_since, fans, average_stars)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                user['user_id'],
+                user.get('name', ''),
+                user.get('review_count', 0),
+                yelping_since,
+                user.get('fans', 0),
+                user.get('average_stars', 0)
+            ))
+            
+            # Commit the transaction
+            self.mysql_conn.commit()
+            
+            # Broadcast the event
+            self._broadcast_event('mysql', 'user', {
+                'user_id': user['user_id'],
+                'name': user.get('name', ''),
+                'yelping_since': user.get('yelping_since', '')
+            })
+            
+            print(f"MySQL: Added user {user.get('name', '')} (ID: {user['user_id']})")
+        
+        except Exception as e:
+            print(f"Error processing user in MySQL: {e}")
+            self.mysql_conn.rollback()
+        finally:
+            cursor.close()
+    
     def _process_review_mysql(self, review):
         """Process a review message for MySQL."""
         if not self.mysql_conn:
@@ -188,13 +362,45 @@ class YelpKafkaConsumer:
             
             if not time_id:
                 print(f"Time ID not found for date: {date_str}")
-                return
+                # Try to add the date to dim_time
+                try:
+                    date_obj = datetime.fromisoformat(review.get('date'))
+                    day_name = date_obj.strftime('%A')
+                    month_name = date_obj.strftime('%B')
+                    quarter = ((date_obj.month - 1) // 3) + 1
+                    
+                    cursor.execute("""
+                        INSERT IGNORE INTO dim_time 
+                        (date_actual, day_of_week, day_of_month, month_actual, month_name, quarter_actual, year_actual)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        date_str,
+                        day_name,
+                        date_obj.day,
+                        date_obj.month,
+                        month_name,
+                        quarter,
+                        date_obj.year
+                    ))
+                    
+                    # Get the ID of the newly added time
+                    cursor.execute("SELECT time_id FROM dim_time WHERE date_actual = %s", (date_str,))
+                    result = cursor.fetchone()
+                    if result:
+                        time_id = result['time_id']
+                        # Also add to our lookup
+                        self.time_lookup[date_str] = time_id
+                    else:
+                        return  # Can't process without a time_id
+                except Exception as e:
+                    print(f"Error adding date to dim_time: {e}")
+                    return
             
             # Insert review into fact_review table
             cursor.execute("""
                 INSERT IGNORE INTO fact_review 
-                (review_id, business_id, user_id, time_id, stars, useful_votes, funny_votes, cool_votes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (review_id, business_id, user_id, time_id, stars, useful_votes, funny_votes, cool_votes, text)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 review['review_id'],
                 review['business_id'],
@@ -203,7 +409,8 @@ class YelpKafkaConsumer:
                 review.get('stars', 0),
                 review.get('useful', 0),
                 review.get('funny', 0),
-                review.get('cool', 0)
+                review.get('cool', 0),
+                review.get('text', '')
             ))
             
             # Update business review count and stars
@@ -213,10 +420,17 @@ class YelpKafkaConsumer:
                 WHERE business_id = %s
             """, (review['business_id'],))
             
+            # Update user review count
+            cursor.execute("""
+                UPDATE dim_user
+                SET review_count = review_count + 1
+                WHERE user_id = %s
+            """, (review['user_id'],))
+            
             # Update summary table
             cursor.execute("""
-                INSERT INTO summary_business_performance (business_id, total_reviews, avg_rating, total_checkins)
-                VALUES (%s, 1, %s, 0)
+                INSERT INTO summary_business_performance (business_id, total_reviews, avg_rating, total_checkins, total_tips)
+                VALUES (%s, 1, %s, 0, 0)
                 ON DUPLICATE KEY UPDATE
                 total_reviews = total_reviews + 1,
                 avg_rating = (avg_rating * total_reviews + %s) / (total_reviews + 1)
@@ -237,6 +451,8 @@ class YelpKafkaConsumer:
                 'stars': review.get('stars', 0),
                 'date': review.get('date')
             })
+            
+            print(f"MySQL: Added review {review['review_id']} for business {review['business_id']}")
         
         except Exception as e:
             print(f"Error processing review in MySQL: {e}")
@@ -258,7 +474,39 @@ class YelpKafkaConsumer:
             
             if not time_id:
                 print(f"Time ID not found for date: {date_str}")
-                return
+                # Try to add the date to dim_time
+                try:
+                    date_obj = datetime.fromisoformat(checkin.get('date'))
+                    day_name = date_obj.strftime('%A')
+                    month_name = date_obj.strftime('%B')
+                    quarter = ((date_obj.month - 1) // 3) + 1
+                    
+                    cursor.execute("""
+                        INSERT IGNORE INTO dim_time 
+                        (date_actual, day_of_week, day_of_month, month_actual, month_name, quarter_actual, year_actual)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        date_str,
+                        day_name,
+                        date_obj.day,
+                        date_obj.month,
+                        month_name,
+                        quarter,
+                        date_obj.year
+                    ))
+                    
+                    # Get the ID of the newly added time
+                    cursor.execute("SELECT time_id FROM dim_time WHERE date_actual = %s", (date_str,))
+                    result = cursor.fetchone()
+                    if result:
+                        time_id = result['time_id']
+                        # Also add to our lookup
+                        self.time_lookup[date_str] = time_id
+                    else:
+                        return  # Can't process without a time_id
+                except Exception as e:
+                    print(f"Error adding date to dim_time: {e}")
+                    return
             
             # Insert checkin into fact_checkin table
             cursor.execute("""
@@ -273,8 +521,8 @@ class YelpKafkaConsumer:
             
             # Update summary table
             cursor.execute("""
-                INSERT INTO summary_business_performance (business_id, total_reviews, avg_rating, total_checkins)
-                VALUES (%s, 0, 0, %s)
+                INSERT INTO summary_business_performance (business_id, total_reviews, avg_rating, total_checkins, total_tips)
+                VALUES (%s, 0, 0, %s, 0)
                 ON DUPLICATE KEY UPDATE
                 total_checkins = total_checkins + %s
             """, (
@@ -292,6 +540,8 @@ class YelpKafkaConsumer:
                 'date': checkin.get('date'),
                 'count': checkin.get('count', 1)
             })
+            
+            print(f"MySQL: Added checkin for business {checkin['business_id']} with count {checkin.get('count', 1)}")
         
         except Exception as e:
             print(f"Error processing checkin in MySQL: {e}")
@@ -299,9 +549,76 @@ class YelpKafkaConsumer:
         finally:
             cursor.close()
     
+    def _process_business_mongodb(self, business):
+        """Process a business message for MongoDB."""
+        if self.mongodb_db is None:
+            return
+        
+        try:
+            # Insert business into businesses collection
+            self.mongodb_db.businesses.insert_one(business)
+            
+            # Create an empty business summary
+            summary = {
+                'business_id': business['business_id'],
+                'name': business['name'],
+                'review_stats': {
+                    'avg_stars': 0,
+                    'review_count': 0,
+                    'five_star_count': 0,
+                    'one_star_count': 0,
+                    'other_star_count': 0
+                },
+                'checkin_count': 0,
+                'tip_count': 0
+            }
+            
+            self.mongodb_db.business_summaries.insert_one(summary)
+            
+            # Broadcast the event
+            self._broadcast_event('mongodb', 'business', {
+                'business_id': business['business_id'],
+                'name': business['name'],
+                'city': business.get('city', ''),
+                'state': business.get('state', '')
+            })
+            
+            print(f"MongoDB: Added business {business['name']} (ID: {business['business_id']})")
+        
+        except Exception as e:
+            print(f"Error processing business in MongoDB: {e}")
+    
+    def _process_user_mongodb(self, user):
+        """Process a user message for MongoDB."""
+        if self.mongodb_db is None:
+            return
+        
+        try:
+            # Convert yelping_since to datetime if present
+            if 'yelping_since' in user:
+                try:
+                    user['yelping_since'] = datetime.strptime(user['yelping_since'], '%Y-%m-%d')
+                except:
+                    pass
+            
+            # Insert user into users collection
+            self.mongodb_db.users.insert_one(user)
+            
+            # Broadcast the event
+            self._broadcast_event('mongodb', 'user', {
+                'user_id': user['user_id'],
+                'name': user.get('name', ''),
+                'yelping_since': user.get('yelping_since', '')
+            })
+            
+            print(f"MongoDB: Added user {user.get('name', '')} (ID: {user['user_id']})")
+        
+        except Exception as e:
+            print(f"Error processing user in MongoDB: {e}")
+    
     def _process_review_mongodb(self, review):
         """Process a review message for MongoDB."""
-        if not self.mongodb_db:
+        if self.mongodb_db is None:
             return
         
         try:
@@ -318,6 +635,12 @@ class YelpKafkaConsumer:
             # Update business document
             self.mongodb_db.businesses.update_one(
                 {'business_id': review['business_id']},
+                {'$inc': {'review_count': 1}}
+            )
+            
+            # Update user document
+            self.mongodb_db.users.update_one(
+                {'user_id': review['user_id']},
                 {'$inc': {'review_count': 1}}
             )
             
@@ -349,13 +672,15 @@ class YelpKafkaConsumer:
                 'stars': review.get('stars', 0),
                 'date': review.get('date').isoformat() if isinstance(review.get('date'), datetime) else review.get('date')
             })
+            
+            print(f"MongoDB: Added review {review['review_id']} for business {review['business_id']}")
         
         except Exception as e:
             print(f"Error processing review in MongoDB: {e}")
     
     def _process_checkin_mongodb(self, checkin):
         """Process a checkin message for MongoDB."""
-        if not self.mongodb_db:
+        if self.mongodb_db is None:
             return
         
         try:
@@ -386,18 +711,159 @@ class YelpKafkaConsumer:
                 'business_id': checkin['business_id'],
                 'count': checkin.get('count', 1)
             })
+            
+            print(f"MongoDB: Added checkin for business {checkin['business_id']} with count {checkin.get('count', 1)}")
         
         except Exception as e:
             print(f"Error processing checkin in MongoDB: {e}")
     
+    def _process_business_neo4j(self, session, business):
+        """Process a business message for Neo4j."""
+        if self.neo4j_driver is None:
+            return
+            
+        try:
+            # Create Business node
+            query = """
+            CREATE (b:Business {business_id: $business_id})
+            SET b.name = $name,
+                b.stars = $stars,
+                b.review_count = $review_count,
+                b.is_open = $is_open,
+                b.summary_review_count = 0,
+                b.summary_avg_stars = 0,
+                b.summary_checkin_count = 0
+            
+            // Create or merge Location node and relate to Business
+            WITH b
+            MERGE (l:Location {city: $city, state: $state, postal_code: $postal_code})
+            ON CREATE SET l.latitude = $latitude, l.longitude = $longitude
+            MERGE (b)-[:LOCATED_IN]->(l)
+            
+            // Handle categories
+            WITH b
+            UNWIND $categories as category
+            MERGE (c:Category {name: category})
+            MERGE (b)-[:IN_CATEGORY]->(c)
+            
+            RETURN b.business_id
+            """
+            
+            # Parse categories
+            categories = []
+            if 'categories' in business and business['categories']:
+                categories = [c.strip() for c in business['categories'].split(',') if c.strip()]
+            
+            result = session.run(query, {
+                'business_id': business['business_id'],
+                'name': business['name'],
+                'stars': business.get('stars', 0),
+                'review_count': business.get('review_count', 0),
+                'is_open': business.get('is_open', 1) == 1,  # Convert to boolean
+                'city': business.get('city', ''),
+                'state': business.get('state', ''),
+                'postal_code': business.get('postal_code', ''),
+                'latitude': business.get('latitude'),
+                'longitude': business.get('longitude'),
+                'categories': categories
+            })
+            
+            # Check if the business was created
+            if result.single():
+                # Broadcast the event
+                self._broadcast_event('neo4j', 'business', {
+                    'business_id': business['business_id'],
+                    'name': business['name'],
+                    'city': business.get('city', ''),
+                    'state': business.get('state', '')
+                })
+                
+                print(f"Neo4j: Added business {business['name']} (ID: {business['business_id']})")
+            else:
+                print(f"Neo4j: Failed to add business {business['business_id']}")
+        
+        except Exception as e:
+            print(f"Error processing business in Neo4j: {e}")
+    
+    def _process_user_neo4j(self, session, user):
+        """Process a user message for Neo4j."""
+        if self.neo4j_driver is None:
+            return
+            
+        try:
+            # Create User node
+            query = """
+            CREATE (u:User {user_id: $user_id})
+            SET u.name = $name,
+                u.review_count = $review_count,
+                u.yelping_since = date($yelping_since),
+                u.fans = $fans,
+                u.average_stars = $average_stars
+            
+            RETURN u.user_id
+            """
+            
+            # Parse yelping_since date
+            yelping_since = None
+            if 'yelping_since' in user:
+                yelping_since = user['yelping_since']
+            
+            result = session.run(query, {
+                'user_id': user['user_id'],
+                'name': user.get('name', ''),
+                'review_count': user.get('review_count', 0),
+                'yelping_since': yelping_since,
+                'fans': user.get('fans', 0),
+                'average_stars': user.get('average_stars', 0)
+            })
+            
+            # Check if the user was created
+            if result.single():
+                # Broadcast the event
+                self._broadcast_event('neo4j', 'user', {
+                    'user_id': user['user_id'],
+                    'name': user.get('name', ''),
+                    'yelping_since': user.get('yelping_since', '')
+                })
+                
+                print(f"Neo4j: Added user {user.get('name', '')} (ID: {user['user_id']})")
+            else:
+                print(f"Neo4j: Failed to add user {user['user_id']}")
+        
+        except Exception as e:
+            print(f"Error processing user in Neo4j: {e}")
+    
     def _process_review_neo4j(self, session, review):
         """Process a review message for Neo4j."""
+        if self.neo4j_driver is None:
+            return
+            
         try:
             # Create review node and connect to Business, User and Time
             query = """
             MATCH (b:Business {business_id: $business_id})
             MATCH (u:User {user_id: $user_id})
-            MATCH (t:Time {date: date($date)})
+            
+            // Try to find time with exact date first, then fall back to year-month
+            OPTIONAL MATCH (t:Time {date: date($date)})
+            WITH b, u, t
+            WHERE t IS NOT NULL
+            
+            // If no exact date match, try year-month
+            CALL {
+                WITH b, u, t
+                WITH b, u, t
+                WHERE t IS NULL
+                MATCH (t2:Time)
+                WHERE t2.year = $year AND t2.month = $month
+                RETURN t2 as fallback_time
+                LIMIT 1
+            }
+            
+            WITH b, u, COALESCE(t, fallback_time) as time_node
+            
+            // Only proceed if we have a valid time node
+            WHERE time_node IS NOT NULL
             
             CREATE (r:Review {review_id: $review_id})
             SET r.stars = $stars,
@@ -410,15 +876,25 @@ class YelpKafkaConsumer:
             
             CREATE (u)-[:WROTE]->(r)
             CREATE (r)-[:REVIEWS]->(b)
-            CREATE (r)-[:ON_DATE]->(t)
+            CREATE (r)-[:ON_DATE]->(time_node)
             
             // Update business stats
-            SET b.review_count = coalesce(b.review_count, 0) + 1,
-                b.summary_review_count = coalesce(b.summary_review_count, 0) + 1,
-                b.summary_avg_stars = (coalesce(b.summary_avg_stars, 0) * coalesce(b.summary_review_count, 0) + $stars) / (coalesce(b.summary_review_count, 0) + 1)
+            SET b.review_count = COALESCE(b.review_count, 0) + 1,
+                b.summary_review_count = COALESCE(b.summary_review_count, 0) + 1,
+                b.summary_avg_stars = (COALESCE(b.summary_avg_stars, 0) * COALESCE(b.summary_review_count, 0) + $stars) / (COALESCE(b.summary_review_count, 0) + 1)
+            
+            // Update user stats
+            SET u.review_count = COALESCE(u.review_count, 0) + 1
+                
+            RETURN r.review_id
             """
             
-            session.run(query, {
+            # Get year and month from date
+            date_obj = datetime.fromisoformat(review.get('date'))
+            year = date_obj.year
+            month = date_obj.month
+            
+            result = session.run(query, {
                 'review_id': review['review_id'],
                 'business_id': review['business_id'],
                 'user_id': review['user_id'],
@@ -427,49 +903,97 @@ class YelpKafkaConsumer:
                 'funny': review.get('funny', 0),
                 'cool': review.get('cool', 0),
                 'text': review.get('text', ''),
-                'date': review.get('date')
+                'date': review.get('date'),
+                'year': year,
+                'month': month
             })
             
-            # Broadcast the event
-            self._broadcast_event('neo4j', 'review', {
-                'review_id': review['review_id'],
-                'business_id': review['business_id'],
-                'user_id': review['user_id'],
-                'stars': review.get('stars', 0),
-                'date': review.get('date')
-            })
+            # Check if the review was created
+            record = result.single()
+            if record:
+                # Broadcast the event
+                self._broadcast_event('neo4j', 'review', {
+                    'review_id': review['review_id'],
+                    'business_id': review['business_id'],
+                    'user_id': review['user_id'],
+                    'stars': review.get('stars', 0),
+                    'date': review.get('date')
+                })
+                
+                print(f"Neo4j: Added review {review['review_id']} for business {review['business_id']}")
+            else:
+                print(f"Neo4j: Failed to add review - perhaps missing Business, User, or Time node?")
         
         except Exception as e:
             print(f"Error processing review in Neo4j: {e}")
     
     def _process_checkin_neo4j(self, session, checkin):
         """Process a checkin message for Neo4j."""
+        if self.neo4j_driver is None:
+            return
+            
         try:
             # Create or update checkin relationship
             query = """
             MATCH (b:Business {business_id: $business_id})
-            MATCH (t:Time {date: date($date)})
             
-            MERGE (b)-[c:HAD_CHECKIN]->(t)
+            // Try to find time with exact date first, then fall back to year-month
+            OPTIONAL MATCH (t:Time {date: date($date)})
+            WITH b, t
+            WHERE t IS NOT NULL
+            
+            // If no exact date match, try year-month
+            CALL {
+                WITH b, t
+                WITH b, t
+                WHERE t IS NULL
+                MATCH (t2:Time)
+                WHERE t2.year = $year AND t2.month = $month
+                RETURN t2 as fallback_time
+                LIMIT 1
+            }
+            
+            WITH b, COALESCE(t, fallback_time) as time_node
+            
+            // Only proceed if we have a valid time node
+            WHERE time_node IS NOT NULL
+            
+            MERGE (b)-[c:HAD_CHECKIN]->(time_node)
             ON CREATE SET c.count = $count
             ON MATCH SET c.count = c.count + $count
             
             // Update business stats
-            SET b.summary_checkin_count = coalesce(b.summary_checkin_count, 0) + $count
+            SET b.summary_checkin_count = COALESCE(b.summary_checkin_count, 0) + $count
+            
+            RETURN b.business_id, time_node.date, c.count
             """
             
-            session.run(query, {
+            # Get year and month from date
+            date_obj = datetime.fromisoformat(checkin.get('date'))
+            year = date_obj.year
+            month = date_obj.month
+            
+            result = session.run(query, {
                 'business_id': checkin['business_id'],
                 'date': checkin.get('date'),
-                'count': checkin.get('count', 1)
+                'count': checkin.get('count', 1),
+                'year': year,
+                'month': month
             })
             
-            # Broadcast the event
-            self._broadcast_event('neo4j', 'checkin', {
-                'business_id': checkin['business_id'],
-                'date': checkin.get('date'),
-                'count': checkin.get('count', 1)
-            })
+            # Check if the checkin was created/updated
+            record = result.single()
+            if record:
+                # Broadcast the event
+                self._broadcast_event('neo4j', 'checkin', {
+                    'business_id': checkin['business_id'],
+                    'date': checkin.get('date'),
+                    'count': checkin.get('count', 1)
+                })
+                
+                print(f"Neo4j: Added checkin for business {checkin['business_id']} with count {checkin.get('count', 1)}")
+            else:
+                print(f"Neo4j: Failed to add checkin - perhaps missing Business or Time node?")
         
         except Exception as e:
             print(f"Error processing checkin in Neo4j: {e}")

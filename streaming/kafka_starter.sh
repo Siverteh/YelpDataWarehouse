@@ -1,11 +1,11 @@
 #!/bin/bash
-# run_robust_kafka.sh - Run the robust Kafka consumer & producer
+# kafka_starter.sh - Enhanced script to run Kafka consumer and producer with correct paths
 
-echo "=== RUNNING ROBUST KAFKA SOLUTION ==="
+echo "=== RUNNING ENHANCED KAFKA PIPELINE FOR YELP DATA WAREHOUSE ==="
 
 # Set defaults
-COUNT=50
-INTERVAL=1.0
+COUNT=100
+INTERVAL=0.5
 
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
@@ -18,11 +18,11 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --help)
             echo "Usage: $0 [OPTIONS]"
-            echo "Run robust Kafka consumer and producer."
+            echo "Run Kafka consumer and producer for Yelp Data Warehouse."
             echo
             echo "Options:"
-            echo "  --count=N       Number of events to generate (default: 50)"
-            echo "  --interval=X    Time interval between events in seconds (default: 1.0)"
+            echo "  --count=N       Number of events to generate (default: 100)"
+            echo "  --interval=X    Time interval between events in seconds (default: 0.5)"
             echo "  --help          Display this help message"
             exit 0
             ;;
@@ -35,41 +35,56 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# Make sure the robust consumer is in the container
-sudo docker cp streaming/robust_consumer.py yelp-kafka-streaming:/app/robust_consumer.py
-sudo docker-compose exec kafka_streaming chmod +x /app/robust_consumer.py
+# Copy the enhanced scripts to the container - using correct paths
+echo "Setting up enhanced scripts..."
+# Using the files from the streaming directory
+sudo docker cp ./streaming/consumer.py yelp-kafka-streaming:/app/consumer.py
+sudo docker cp ./streaming/producer.py yelp-kafka-streaming:/app/producer.py
+sudo docker-compose exec kafka_streaming chmod +x /app/consumer.py
+sudo docker-compose exec kafka_streaming chmod +x /app/producer.py
 
-# Ensure Kafka topics exist
+# Ensure Kafka topics exist (including new topics for businesses and users)
 echo "Creating Kafka topics..."
-docker exec yelp-kafka kafka-topics --create --if-not-exists \
+sudo docker exec yelp-kafka kafka-topics --create --if-not-exists \
     --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic yelp-reviews
-docker exec yelp-kafka kafka-topics --create --if-not-exists \
+sudo docker exec yelp-kafka kafka-topics --create --if-not-exists \
     --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic yelp-checkins
+sudo docker exec yelp-kafka kafka-topics --create --if-not-exists \
+    --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic yelp-businesses
+sudo docker exec yelp-kafka kafka-topics --create --if-not-exists \
+    --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic yelp-users
 
 # List topics to confirm creation
 echo "Listing Kafka topics..."
-docker exec yelp-kafka kafka-topics --list --bootstrap-server kafka:9092
+sudo docker exec yelp-kafka kafka-topics --list --bootstrap-server kafka:9092
 
-# Stop any existing consumer
-echo "Stopping any existing consumer..."
-sudo docker-compose exec kafka_streaming ps aux | grep "python /app/robust_consumer.py" | grep -v grep | awk '{print $2}' | xargs -r sudo docker-compose exec kafka_streaming kill
+# Stop any existing consumer processes
+echo "Stopping any existing consumer processes..."
+sudo docker-compose exec kafka_streaming pkill -f "python /app/consumer.py" || true
 
-# Start the robust consumer in the background
-echo "Starting robust consumer in background..."
-sudo docker-compose exec -d kafka_streaming python /app/robust_consumer.py
+# Start the enhanced consumer in the background
+echo "Starting enhanced consumer in background..."
+sudo docker-compose exec -d kafka_streaming python /app/consumer.py
 
 # Wait for consumer to initialize
 echo "Waiting for consumer to initialize..."
-sleep 3
+sleep 5
 
 # Start producer to generate synthetic data
-echo "Starting synthetic data generation with producer..."
-sudo docker-compose exec kafka_streaming python producer.py --interval $INTERVAL --count $COUNT
+echo "Starting synthetic data generation with producer ($COUNT events, $INTERVAL second interval)..."
+echo "This will create reviews, checkins, businesses, and users!"
+sudo docker-compose exec kafka_streaming python /app/producer.py --interval $INTERVAL --count $COUNT
 
 echo
 echo "Synthetic data generation complete."
-echo "The robust consumer is running in the background and will continue to process messages."
-echo "You should now see database updates when you refresh the page."
+echo "The consumer is running in the background and will continue to process messages."
 echo
-echo "To view consumer logs: sudo docker-compose exec kafka_streaming cat /var/log/consumer.log"
-echo "To stop the consumer: sudo docker-compose restart kafka_streaming"
+echo "You should now see database updates when you refresh the web dashboard."
+echo "New businesses and users were created in addition to reviews and checkins."
+echo
+echo "To check if consumer is running: sudo docker-compose exec kafka_streaming ps aux | grep consumer"
+echo "To see database statistics:"
+echo "  MySQL: sudo docker-compose exec mysql mysql -u root -puser yelp_dw -e 'SELECT COUNT(*) FROM dim_business; SELECT COUNT(*) FROM dim_user; SELECT COUNT(*) FROM fact_review;'"
+echo "  MongoDB: sudo docker-compose exec mongodb mongo -u user -p user --authenticationDatabase admin yelp_db --eval 'db.businesses.count(); db.users.count(); db.reviews.count();'"
+echo "To stop the consumer: sudo docker-compose exec kafka_streaming pkill -f consumer.py"
+echo "To restart the Kafka service: sudo docker-compose restart kafka_streaming"

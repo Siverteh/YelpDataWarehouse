@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """
-Kafka Producer for Yelp Data Warehouse
-Generates simulated Yelp data events and sends them to Kafka topics.
+Enhanced Kafka Producer for Yelp Data Warehouse
+Generates simulated Yelp data events and sends them to Kafka topics,
+including businesses and users.
 """
 
 import os
 import json
 import time
 import random
+import string
 import pymysql
 from kafka import KafkaProducer
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class YelpKafkaProducer:
     """
     Producer that generates simulated Yelp data events and sends them to Kafka topics.
+    Now includes business and user generation.
     """
     
     def __init__(self, bootstrap_servers='kafka:9092'):
@@ -29,6 +32,20 @@ class YelpKafkaProducer:
         # Load sample business and user IDs
         self.business_ids = self._load_business_ids()
         self.user_ids = self._load_user_ids()
+        
+        # Load cities and states for business generation
+        self.cities = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "Philadelphia", 
+                      "San Antonio", "San Diego", "Dallas", "San Jose", "Austin", "Seattle", 
+                      "Boston", "Las Vegas", "Portland", "Denver", "Miami", "Atlanta"]
+        self.states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", 
+                       "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", 
+                       "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", 
+                       "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", 
+                       "WI", "WY"]
+        self.categories = ["Restaurants", "Fast Food", "Coffee & Tea", "Bars", "Nightlife", 
+                          "Shopping", "Beauty & Spas", "Health & Medical", "Home Services", 
+                          "Auto Services", "Local Services", "Hotels & Travel", "Arts & Entertainment", 
+                          "Active Life", "Professional Services", "Education", "Real Estate", "Financial Services"]
         
         print(f"Loaded {len(self.business_ids)} businesses and {len(self.user_ids)} users")
     
@@ -121,6 +138,96 @@ class YelpKafkaProducer:
         
         # Fallback to sample IDs
         return ["sample_user_id_1", "sample_user_id_2", "sample_user_id_3"]
+    
+    def _generate_random_id(self, prefix=""):
+        """Generate a random ID string."""
+        random_id = ''.join(random.choices(string.ascii_letters + string.digits, k=22))
+        return f"{prefix}{random_id}"
+    
+    def generate_business(self):
+        """Generate a simulated business."""
+        business_id = self._generate_random_id()
+        city = random.choice(self.cities)
+        state = random.choice(self.states)
+        postal_code = f"{random.randint(10000, 99999)}"
+        
+        # Generate 1-3 random categories
+        num_categories = random.randint(1, 3)
+        business_categories = random.sample(self.categories, num_categories)
+        
+        # Create business name parts - fixed to avoid f-string backslash issues
+        prefix_options = ["The", "New", "Original", "Classic", "Urban", "Golden", "Silver", "Blue", "Green"]
+        owner_options = ["Joe's", "Mike's", "Amy's", "John's", "Sarah's", "David's"]
+        type_options = ["Cafe", "Restaurant", "Diner", "Bistro", "Grill", "Place", "House", "Kitchen"]
+        location_prefixes = ["Downtown", "Uptown", "Riverside", "Lakeside", "Hillside", "Seaside", "Central"]
+        
+        business_name_templates = [
+            # Template 1: The/New/etc + Cafe/Restaurant/etc
+            random.choice(prefix_options) + " " + random.choice(type_options),
+            # Template 2: Joe's/Mike's/etc + Cafe/Restaurant/etc
+            random.choice(owner_options) + " " + random.choice(type_options),
+            # Template 3: [City] + Cafe/Restaurant/etc
+            city + " " + random.choice(type_options),
+            # Template 4: Downtown/Uptown/etc + Cafe/Restaurant/etc
+            random.choice(location_prefixes) + " " + random.choice(type_options)
+        ]
+        
+        business = {
+            'business_id': business_id,
+            'name': random.choice(business_name_templates),
+            'city': city,
+            'state': state,
+            'postal_code': postal_code,
+            'latitude': round(random.uniform(25, 49), 6),
+            'longitude': round(random.uniform(-125, -70), 6),
+            'stars': round(random.uniform(1, 5), 1),
+            'review_count': 0,
+            'is_open': 1,
+            'categories': ','.join(business_categories),
+            'attributes': {},  # Simplified attributes
+            'hours': {},  # Simplified hours
+            'source': 'streaming'
+        }
+        
+        # Add to our local cache of business IDs
+        self.business_ids.append(business_id)
+        
+        return business
+    
+    def generate_user(self):
+        """Generate a simulated user."""
+        user_id = self._generate_random_id()
+        
+        # Generate a random "yelping_since" date in the past 10 years
+        days_ago = random.randint(1, 3650)  # Up to ~10 years ago
+        yelping_since = (datetime.now() - timedelta(days=days_ago)).strftime('%Y-%m-%d')
+        
+        first_names = ["James", "Mary", "John", "Patricia", "Robert", "Jennifer", "Michael", "Linda", 
+                      "William", "Elizabeth", "David", "Susan", "Richard", "Jessica", "Joseph", "Sarah", 
+                      "Thomas", "Karen", "Charles", "Nancy", "Christopher", "Lisa", "Daniel", "Betty", 
+                      "Matthew", "Dorothy", "Anthony", "Sandra", "Mark", "Ashley", "Donald", "Kimberly"]
+                      
+        last_names = ["Smith", "Johnson", "Williams", "Jones", "Brown", "Davis", "Miller", "Wilson", 
+                     "Moore", "Taylor", "Anderson", "Thomas", "Jackson", "White", "Harris", "Martin", 
+                     "Thompson", "Garcia", "Martinez", "Robinson", "Clark", "Rodriguez", "Lewis", "Lee", 
+                     "Walker", "Hall", "Allen", "Young", "Hernandez", "King", "Wright", "Lopez"]
+        
+        name = f"{random.choice(first_names)} {random.choice(last_names)}"
+        
+        user = {
+            'user_id': user_id,
+            'name': name,
+            'review_count': 0,
+            'yelping_since': yelping_since,
+            'fans': 0,
+            'average_stars': 0.0,
+            'source': 'streaming'
+        }
+        
+        # Add to our local cache of user IDs
+        self.user_ids.append(user_id)
+        
+        return user
     
     def generate_review(self):
         """Generate a simulated review."""
@@ -218,17 +325,36 @@ class YelpKafkaProducer:
             print(f"Starting to stream events with interval {interval}s. Press Ctrl+C to stop.")
             
             while count is None or i < count:
-                # Generate a review (70% probability)
-                if random.random() < 0.7:
+                # Determine which type of event to send
+                event_type = random.choices(
+                    ["review", "checkin", "business", "user"],
+                    weights=[0.6, 0.2, 0.1, 0.1],  # 60% reviews, 20% checkins, 10% businesses, 10% users
+                    k=1
+                )[0]
+                
+                if event_type == "review":
+                    # Generate a review
                     review = self.generate_review()
                     self.producer.send('yelp-reviews', key=review['business_id'], value=review)
                     print(f"Sent review: {review['review_id']} for business {review['business_id']}")
                 
-                # Generate a checkin (30% probability)
-                else:
+                elif event_type == "checkin":
+                    # Generate a checkin
                     checkin = self.generate_checkin()
                     self.producer.send('yelp-checkins', key=checkin['business_id'], value=checkin)
                     print(f"Sent checkin for business {checkin['business_id']}")
+                
+                elif event_type == "business":
+                    # Generate a new business
+                    business = self.generate_business()
+                    self.producer.send('yelp-businesses', key=business['business_id'], value=business)
+                    print(f"Sent new business: {business['name']} (ID: {business['business_id']})")
+                
+                elif event_type == "user":
+                    # Generate a new user
+                    user = self.generate_user()
+                    self.producer.send('yelp-users', key=user['user_id'], value=user)
+                    print(f"Sent new user: {user['name']} (ID: {user['user_id']})")
                 
                 self.producer.flush()
                 i += 1
